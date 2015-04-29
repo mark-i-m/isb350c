@@ -59,7 +59,7 @@ module memcontr(input clk,
 
     // queues -- each 8 long, which should be more than enough
     fifo #(5) dq(clk, dpush, ddata_in, dq_full,
-                      dpop, ddata_out, dq_empty);
+                      dpop, ddata_out, dq_empty, 0);
 
     reg dpush = 0, dpop = 0;
     reg [15:0]ddata_in = 16'hxxxx;
@@ -67,8 +67,8 @@ module memcontr(input clk,
     wire dq_full, dq_empty;
     wire [15:0]ddata_out;
 
-    fifo #(3) iq(clk, ipush, idata_in, iq_full,
-                      ipop, idata_out, iq_empty);
+    fifo #(10) iq(clk, ipush, idata_in, iq_full,
+                      ipop, idata_out, iq_empty, 0);
 
     reg ipush = 0, ipop = 0;
     reg [15:0]idata_in = 16'hxxxx;

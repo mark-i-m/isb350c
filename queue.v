@@ -18,9 +18,11 @@
 
 module fifo(input clk,
             input push, input [15:0]data_in, output q_full,
-            input pop, output [15:0]data_out, output q_empty);
+            input pop, output [15:0]data_out, output q_empty,
+            input flush);
 
     parameter WIDTH = 5;
+    parameter DEBUG = 0;
 
     // head and tail pointers
     reg [WIDTH:0]head = 0; // first valid entry
@@ -33,19 +35,24 @@ module fifo(input clk,
     // logic
     always @(posedge clk) begin
         // push
-        if (push && !q_full) begin
+        if (push && !q_full && !flush) begin
             data[tail] <= data_in;
             tail <= tail == ((1 << WIDTH) -1) ? 0 : tail + 1;
-            //$display("q[%d] push %x", tail, data_in);
+            if (DEBUG) $display("%m[%d] push %x", tail, data_in);
         end
         // pop
-        if (pop && !q_empty) begin
+        if (pop && !q_empty && !flush) begin
             data_out_reg <= data[head];
             head <= head == ((1 << WIDTH) -1) ? 0 : head + 1;
-            //$display("q[%d] pop  %x", head, data[head]);
+            if (DEBUG) $display("%m[%d] pop  %x", head, data[head]);
+        end
+        if (flush) begin
+            head <= tail;
+            n <= 0;
+            if (DEBUG) $display("%m flush");
         end
         // update counts
-        n <= n + ((push && !q_full) - (pop && !q_empty));
+        n <= n + ((push && !q_full && !flush) - (pop && !q_empty && !flush));
     end
 
     // output

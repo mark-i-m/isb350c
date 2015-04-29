@@ -1,5 +1,7 @@
 `timescale 1ps/1ps
 
+// Simple Tomasulo processor
+
 `define REG_BUSY(i) regs[i][31]
 `define REG_SRC(i)  regs[i][30:16]
 `define REG_VAL(i)  regs[i][15:0]
@@ -34,7 +36,7 @@ module main();
     wire imem_re;
     wire [15:0]imem_raddr;
 
-    wire dmem_re;
+    wire dmem_re; // TODO
     wire [15:0]dmem_raddr;
 
     memcontr i0(clk,
@@ -58,14 +60,14 @@ module main();
         branch_taken, branch_target
         );
 
-    // instruction buffer TODO: hook up
+    // instruction buffer
     wire ib_full, ib_empty;
     reg ib_flush = 0 ;
 
     wire ib_push;
     wire [15:0]ib_push_data;
 
-    reg ib_pop = 0; //TODO: debugging
+    reg ib_pop = 0; // TODO : hook these up
     wire [15:0]ib_data_out;
 
     fifo #(5,1) ib0(clk,
@@ -73,6 +75,7 @@ module main();
         ib_pop, ib_data_out, ib_empty,
         ib_flush);
 
+    // dispatch
     always @(posedge clk) begin
         if (!ib_empty) begin
             ib_pop <= 1;
@@ -92,6 +95,6 @@ module main();
             branch_taken <= 0;
             ib_flush <= 0;
         end
-    end 
+    end
 
 endmodule

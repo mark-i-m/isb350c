@@ -11,7 +11,7 @@ module counter(input isHalt, input clk, input W_v, output cycle);
             $display("@%d cycles\t%d instrs\tCPI=%f",count, insCount, count / insCount);
             $finish;
         end
-        if (count == 100) begin
+        if (count == 300) begin
             $display("#ran for 100000 cycles");
             $finish;
         end

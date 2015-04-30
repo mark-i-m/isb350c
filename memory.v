@@ -1,5 +1,7 @@
 `timescale 1ps/1ps
 
+// TODO: pipeline me!
+
 // A memory system that integrates the given memory module. It keeps
 // a FIFO queue of data requests and instruction requests. Data requests
 // have a higher priority.

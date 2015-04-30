@@ -76,25 +76,13 @@ module main();
         ib_flush);
 
     // dispatch
-    always @(posedge clk) begin
-        if (!ib_empty) begin
-            ib_pop <= 0;
-        end else begin
-            ib_pop <= 0;
-        end
+    dispatch d0();//TODO: <- put stuff here
+    
+    // RSs
+    
+    // CDB
 
-        if (!branch_taken && ib_data_out == 16'h0d0d && !ib_empty && !ib_flush) begin
-            branch_taken <= 1;
-            branch_target <= 0;
-            ib_flush <= 1;
-        //end else if (!branch_taken && ib_data_out == 16'h5555 && !ib_empty && !ib_flush) begin
-        //    branch_taken <= 1;
-        //    branch_target <= 2;
-        //    ib_flush <= 1;
-        end else begin
-            branch_taken <= 0;
-            ib_flush <= 0;
-        end
-    end
+    // FUs
+
 
 endmodule

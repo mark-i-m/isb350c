@@ -61,6 +61,6 @@ module fifo(input clk,
 
     assign data_out = data_out_reg;
     assign q_full = n == (1 << SIZE);
-    assign q_empty = n == 0;
+    assign q_empty = n == 0 || flush;
 
 endmodule

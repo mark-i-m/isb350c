@@ -75,8 +75,38 @@ module main();
         ib_pop, ib_data_out, ib_empty,
         ib_flush);
 
-    // dispatch
-    dispatch d0();//TODO: <- put stuff here
+    // TODO:dispatch
+
+    // This is the dispatcher logic. It is mostly a big block
+    // of combinational logic that was best in its own file...
+    // but Verilog =[
+    //
+    // Inputs:
+    // CDB
+    // IB
+    //
+    // Outputs:
+    // ib_flush?
+    // branch_taken?/branch_target
+    // REGS
+    //  - which regs to update
+    //  - how to update them
+    // RSs
+    //  - which RSs to update
+    //  - what are the values
+    
+
+
+
+
+
+
+
+
+
+
+
+
     
     // RSs
     

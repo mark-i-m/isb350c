@@ -65,12 +65,12 @@ module main();
     reg ib_flush = 0 ;
 
     wire ib_push;
-    wire [15:0]ib_push_data;
+    wire [31:0]ib_push_data;
 
     reg ib_pop = 0; // TODO : hook these up
-    wire [15:0]ib_data_out;
+    wire [31:0]ib_data_out;
 
-    fifo #(5,1) ib0(clk,
+    fifo #(5,32,1) ib0(clk,
         ib_push, ib_push_data, ib_full,
         ib_pop, ib_data_out, ib_empty,
         ib_flush);

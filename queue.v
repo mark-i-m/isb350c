@@ -17,33 +17,34 @@
 // The queue is synchronous
 
 module fifo(input clk,
-            input push, input [15:0]data_in, output q_full,
-            input pop, output [15:0]data_out, output q_empty,
+            input push, input [WIDTH-1:0]data_in, output q_full,
+            input pop, output [WIDTH-1:0]data_out, output q_empty,
             input flush);
 
-    parameter WIDTH = 5;
+    parameter SIZE = 5; // log_2 of the number of entries
+    parameter WIDTH = 16; // number of bits per entry
     parameter DEBUG = 0;
 
     // head and tail pointers
-    reg [WIDTH:0]head = 0; // first valid entry
-    reg [WIDTH:0]tail = 0; // first empty spot
-    reg [WIDTH:0]n = 0; // number of entries currently
+    reg [SIZE:0]head = 0; // first valid entry
+    reg [SIZE:0]tail = 0; // first empty spot
+    reg [SIZE:0]n = 0; // number of entries currently
 
     // data space
-    reg [15:0]data[(1<<WIDTH)-1:0];
+    reg [WIDTH-1:0]data[(1<<SIZE)-1:0];
 
     // logic
     always @(posedge clk) begin
         // push
         if (push && !q_full && !flush) begin
             data[tail] <= data_in;
-            tail <= tail == ((1 << WIDTH) -1) ? 0 : tail + 1;
+            tail <= tail == ((1 << SIZE) -1) ? 0 : tail + 1;
             if (DEBUG) $display("%m[%d] push %x", tail, data_in);
         end
         // pop
         if (pop && !q_empty && !flush) begin
             data_out_reg <= data[head];
-            head <= head == ((1 << WIDTH) -1) ? 0 : head + 1;
+            head <= head == ((1 << SIZE) -1) ? 0 : head + 1;
             if (DEBUG) $display("%m[%d] pop  %x", head, data[head]);
         end
         if (flush) begin
@@ -56,10 +57,10 @@ module fifo(input clk,
     end
 
     // output
-    reg [15:0]data_out_reg = 16'hxxxx;
+    reg [WIDTH-1:0]data_out_reg;
 
     assign data_out = data_out_reg;
-    assign q_full = n == (1 << WIDTH);
+    assign q_full = n == (1 << SIZE);
     assign q_empty = n == 0;
 
 endmodule

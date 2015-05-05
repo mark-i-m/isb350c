@@ -53,7 +53,7 @@ module fifo(input clk,
             if (DEBUG) $display("%m flush");
         end
         // update counts
-        n <= n + ((push && !q_full && !flush) - (pop && !q_empty && !flush));
+        n <= flush ? 0 : n + ((push && !q_full && !flush) - (pop && !q_empty && !flush));
     end
 
     // output

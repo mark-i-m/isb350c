@@ -148,7 +148,7 @@ module main();
        dmem_data_out);
 
     // fetch
-    wire branch_taken = opcode_v && ((opcode == `JMP) || (opcode == `JEQ && jeqReady && `CDB_DATA(0) && `CDB_VALID(0))) && !first;
+    wire branch_taken = ((opcode_v && opcode == `JMP) || (opcode == `JEQ && jeqReady && `CDB_DATA(0) == 1 && waiting_jeq));
     wire [15:0]branch_target = opcode == `JMP ? jjj : pc + d;
 
     fetch f0(clk,
@@ -165,7 +165,6 @@ module main();
     wire ib_push;
     wire [31:0]ib_push_data;
 
-    reg first = 1;
     wire ib_pop = should_pop;//!(fus_full || ib_empty || (opcode == `JEQ && opcode_v && !jeqReady) || is_halted);
     wire [31:0]ib_data_out;
 
@@ -173,12 +172,6 @@ module main();
         ib_push, ib_push_data, ib_full,
         ib_pop, ib_data_out, ib_empty,
         ib_flush);
-
-    always @(posedge clk) begin
-        if (!ib_empty) begin
-            first <= 0;
-        end
-    end
 
     // Dispatch
     // This is the dispatcher logic. It is mostly a big block

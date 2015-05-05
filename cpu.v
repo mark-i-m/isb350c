@@ -148,7 +148,7 @@ module main();
        dmem_data_out);
 
     // fetch
-    wire branch_taken = ((opcode_v && opcode == `JMP) || (opcode == `JEQ && jeqReady && `CDB_DATA(0) == 1 && waiting_jeq));
+    wire branch_taken = ((opcode_v && opcode == `JMP) || (opcode == `JEQ && jeqReady && `CDB_DATA(0) == 1));
     wire [15:0]branch_target = opcode == `JMP ? jjj : pc + d;
 
     fetch f0(clk,

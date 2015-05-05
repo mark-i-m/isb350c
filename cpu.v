@@ -42,6 +42,9 @@
 `define NUM_RS (1<<`RS_WIDTH)
 `define RS_WIDTH 3 // 2 ** RS_WIDTH = NUM_RS
 
+`define NUM_CDBS (1<<`CDBS_WIDTH)
+`define CDBS_WIDTH 1
+
 module main();
 
     // debugging
@@ -124,7 +127,7 @@ module main();
     wire ib_push;
     wire [31:0]ib_push_data;
 
-    wire ib_pop = !(fus_full || ib_empty || (opcode == `JEQ && opcode_v && !jeqReady)); //TODO: undefined wire: fus_full
+    wire ib_pop = !(fus_full || ib_empty || (opcode == `JEQ && opcode_v && !jeqReady));
     wire [31:0]ib_data_out;
 
     fifo #(5,32,1) ib0(clk,
@@ -151,7 +154,7 @@ module main();
     // various dispatcher flags
 
     // Is the current instruction valid
-    wire opcode_v = !ib_empty && !waiting_jeq && !fus_full; //TODO: undefined wire: fus_full
+    wire opcode_v = !ib_empty && !waiting_jeq && !fus_full;
 
     // Is the dispatcher waiting for JEQ to be resolved
     reg waiting_jeq = 0;
@@ -167,7 +170,7 @@ module main();
     // this is a flag: should we write to rt?
     wire rt_v = opcode_v && (opcode == `MOV || opcode == `ADD || opcode == `LD || opcode == `LDR);
     // this is the val to write to rt
-    wire [22:16]rt_val = {1'h1, rs_num}; // TODO: undefined wire: rs_num, bounds for data width?
+    wire [22:16]rt_val = {1'h1, rs_num}; // TODO: bounds for data width?
 
     // another flag: should we write to RS?
     wire rs_v = rt_v && opcode_v && opcode == `JEQ;
@@ -192,8 +195,10 @@ module main();
     // 4 reservation stations for fxu: 0, 1, 2, 3
     // 4 reservation stations for ld: 4, 5, 6, 7
     reg [51:0]rs[0:`NUM_RS-1];
-    // TODO: update from dispatcher and cdb
     // TODO: present inputs to fus
+
+    wire fus_full = ; //TODO: stuff here
+    wire [5:0]rs_num = ; //TODO:stuff here
 
     // Init all RSs to not busy and not issued
     integer rsn;
@@ -204,8 +209,42 @@ module main();
         end
     end
 
+    function cdbSatisfiesRs;
+        input [5:0]rs_num_to_sat;
+        input [1:0]cdb_num_from_sat;
+        input which;
+
+        cdbSatisfiesRs = `CDB_VALID(cdb_num_from_sat) && !`RS_READY(rs_num_to_sat, which) &&
+                        `CDB_RS(cdb_num_from_sat) == `RS_SRC(rs_num_to_sat, which);
+    endfunction
+
+    integer rs_update_counter, cdbn;
     always @(posedge clk) begin
-        //TODO: stuff here
+        // TODO: update ISSUED bit
+        for (rs_update_counter = 0; rs_update_counter < `NUM_RS; rs_update_counter = rs_update_counter + 1) begin
+            if (`RS_BUSY(rs_update_counter)) begin
+                // from CDB
+                for(cdbn = 0; cdbn < `NUM_CDBS; cdbn = cdbn + 1) begin
+                    if(`CDB_VALID(cdbn) && `CDB_RS(cdbn) == rs_update_counter) begin
+                        `RS_BUSY(rs_update_counter) <= 0; // not busy
+                        `RS_ISSUED(rs_update_counter) <= 0; // not issued
+                    end
+                    if(cdbSatisfiesRs(rs_update_counter, cdbn, 0)) begin
+                        rs[rs_update_counter][45] <= 1;
+                        rs[rs_update_counter][31:16] <= `CDB_DATA(cdbn);
+                    end
+                    if(cdbSatisfiesRs(rs_update_counter, cdbn, 1)) begin
+                        rs[rs_update_counter][44] <= 1;
+                        rs[rs_update_counter][15:0] <= `CDB_DATA(cdbn);
+                    end
+                end
+            end else begin
+                // from dispatcher
+                if(rs_update_counter == rs_num) begin
+                    rs[rs_update_counter] <= rs_val;
+                end
+            end
+        end
     end
 
     // CDB
@@ -238,10 +277,10 @@ module main();
     wire      fxu0_jeqReady;
     wire      fxu0_busy;
 
-    wire fxu0_full = `BUSY(4) && `BUSY(5) && `BUSY(6) && `BUSY(7);
-    wire [5:0]fxu0_next_rs = !`BUSY(4) ? 4 :
-                       !`BUSY(5) ? 5 :
-                       !`BUSY(6) ? 6 : 7;
+    wire fxu0_full = `RS_BUSY(4) && `RS_BUSY(5) && `RS_BUSY(6) && `RS_BUSY(7);
+    wire [5:0]fxu0_next_rs = !`RS_BUSY(4) ? 4 :
+                       !`RS_BUSY(5) ? 5 :
+                       !`RS_BUSY(6) ? 6 : 7;
 
 
     ld ld0(clk,
@@ -261,9 +300,9 @@ module main();
 
     wire ld0_busy;
 
-    wire ld0_full = `BUSY(0) && `BUSY(1) && `BUSY(2) && `BUSY(3);
-    wire [5:0]ld0_next_rs = !`BUSY(0) ? 0 :
-                      !`BUSY(1) ? 1 :
-                      !`BUSY(2) ? 2 : 3;
+    wire ld0_full = `RS_BUSY(0) && `RS_BUSY(1) && `RS_BUSY(2) && `RS_BUSY(3);
+    wire [5:0]ld0_next_rs = !`RS_BUSY(0) ? 0 :
+                      !`RS_BUSY(1) ? 1 :
+                      !`RS_BUSY(2) ? 2 : 3;
 
 endmodule

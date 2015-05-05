@@ -165,7 +165,7 @@ module main();
     wire ib_push;
     wire [31:0]ib_push_data;
 
-    wire ib_pop = should_pop;//!(fus_full || ib_empty || (opcode == `JEQ && opcode_v && !jeqReady) || is_halted);
+    wire ib_pop = should_pop;
     wire [31:0]ib_data_out;
 
     fifo #(5,32,1) ib0(clk,
@@ -192,7 +192,7 @@ module main();
     // various dispatcher flags
 
     // Should we pop next cycle?
-    wire should_pop = !ib_empty && !waiting_jeq && !fus_full && !is_halted && !(opcode_v && opcode == `HLT);
+    wire should_pop = !ib_empty && !waiting_jeq && !fus_full && !is_halted && !(opcode_v && opcode == `HLT) && !(opcode_v && opcode == `JEQ);
 
     // Is the current instruction valid
     reg opcode_v = 0;
@@ -203,7 +203,11 @@ module main();
     // Is the dispatcher waiting for JEQ to be resolved
     reg waiting_jeq = 0;
     always @(posedge clk) begin
-        waiting_jeq <= opcode_v && opcode == `JEQ && !jeqReady;
+        if (!waiting_jeq) begin
+            waiting_jeq <= opcode_v && opcode == `JEQ && !jeqReady;
+        end else begin
+            waiting_jeq <= jeqReady ? 0 : 1; // If we are already waiting, simply watch the ready flag
+        end
     end
 
     // Is the processor halted?
@@ -229,8 +233,14 @@ module main();
     // another value: what to write into the rs
     wire rs_r0 = opcode == `LD || opcode == `MOV ? 1 : !`REG_BUSY(ra) || `CDB_SAT(ra);
     wire rs_r1 = opcode == `LD || opcode == `MOV ? 1 : !`REG_BUSY(rb) || `CDB_SAT(rb);
-    wire [15:0]rs_val0 = opcode == `LD || opcode == `MOV ? ii : `CDB_SAT(ra) ? `CDB_VAL(ra) : `REG_VAL(ra);
-    wire [15:0]rs_val1 = opcode == `LD || opcode == `MOV ? 0  : `CDB_SAT(rb) ? `CDB_VAL(rb) : `REG_VAL(rb);
+    wire [15:0]rs_val0 = opcode == `LD || opcode == `MOV ? ii : 
+                                                   rs_r0 ? `REG_VAL(ra) :
+                                            `CDB_SAT(ra) ? `CDB_VAL(ra) :
+                                                           16'hxxxx;
+    wire [15:0]rs_val1 = opcode == `LD || opcode == `MOV ? 0  : 
+                                                   rs_r1 ? `REG_VAL(rb) :
+                                            `CDB_SAT(rb) ? `CDB_VAL(rb) :
+                                                           16'hxxxx;
     wire [51:0]rs_val;
     assign rs_val[51] = 0;
     assign rs_val[50] = 1;

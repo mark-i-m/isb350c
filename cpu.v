@@ -15,8 +15,8 @@
 `define JEQ 6
 
 // Bit fields
-`define REG_BUSY(i) regs[i][31]
-`define REG_SRC(i)  regs[i][30:16]
+`define REG_BUSY(i) regs[i][22]
+`define REG_SRC(i)  regs[i][21:16]
 `define REG_VAL(i)  regs[i][15:0]
 
 `define RS_ISSUED(rs_num) rs[rs_num][51]
@@ -25,6 +25,15 @@
 `define RS_READY(rs_num, which) (!which ? rs[rs_num][45] : rs[rs_num][44])
 `define RS_SRC(rs_num, which) (!which ? rs[rs_num][43:38] : rs[rs_num][37:32])
 `define RS_VAL(rs_num, which) (!which ? rs[rs_num][31:16] : rs[rs_num][15:0])
+
+`define CDB_VALID(cdb_num)  cdb[cdb_num][26]
+`define CDB_RS(cdb_num)     cdb[cdb_num][25:20]
+`define CDB_OP(cdb_num)     cdb[cdb_num][19:16]
+`define CDB_DATA(cdb_num)   cdb[cdb_num][15:0]
+
+`define CDB_SAT(reg_num)    ((`CDB_VALID(0) && `CDB_RS(0) == `REG_SRC(reg_num)) || (`CDB_VALID(1) && `CDB_RS(1) == `REG_SRC(reg_num)))
+`define CDB_SAT_NUM(reg_num)    ((`CDB_VALID(0) && `CDB_RS(0) == `REG_SRC(reg_num)) ? 0 : (`CDB_VALID(1) && `CDB_RS(1) == `REG_SRC(reg_num)) ? 1 : 1'hx)
+`define CDB_VAL(reg_num)    ((`CDB_VALID(0) && `CDB_RS(0) == `REG_SRC(reg_num)) ? `CDB_DATA(0) : (`CDB_VALID(1) && `CDB_RS(1) == `REG_SRC(reg_num)) ? `CDB_DATA(1) : 16'hxxxx)
 
 // Parameters
 `define NUM_REGS (1<<`REGS_WIDTH)
@@ -48,15 +57,27 @@ module main();
     // counter
     counter ctr(0, clk, 1,);
 
-    // registers: busy(1bit), src(15bit), val(16bit)
-    // TODO: update from dispatcher
-    reg [31:0]regs[`NUM_REGS-1:0];
+    // registers: busy(1bit), src(6bit), val(16bit)
+    reg [22:0]regs[`NUM_REGS-1:0];
 
     // Init all registers to not busy
     integer reg_init_counter;
     initial begin
         for (reg_init_counter = 0; reg_init_counter < `NUM_REGS; reg_init_counter = reg_init_counter + 1) begin
             `REG_BUSY(reg_init_counter) <= 0;
+        end
+    end
+
+    // Update every cycle
+    integer regs_update_counter;
+    always @(posedge clk) begin
+        for (regs_update_counter = 0; regs_update_counter < `NUM_REGS; regs_update_counter = regs_update_counter + 1) begin
+            if (`CDB_SAT(regs_update_counter) && !(rt_v && rt == regs_update_counter)) begin
+                regs[regs_update_counter] <= {1'h0, 6'hxx, `CDB_VAL(regs_update_counter)};
+            end
+            if (rt_v && rt == regs_update_counter) begin
+                regs[regs_update_counter] <= rt_val;
+            end
         end
     end
 
@@ -72,7 +93,7 @@ module main();
     wire imem_re;
     wire [15:0]imem_raddr;
 
-    wire dmem_re; // TODO: hook this up
+    wire dmem_re; // TODO: unused wire
     wire [15:0]dmem_raddr;
 
     memcontr i0(clk,
@@ -86,7 +107,7 @@ module main();
        dmem_data_out);
 
     // fetch
-    wire branch_taken = opcode_v && ((opcode == `JMP) || (opcode == `JEQ && jeqReady && cdb0_val)); //TODO: undefined wires: cdb0
+    wire branch_taken = opcode_v && ((opcode == `JMP) || (opcode == `JEQ && jeqReady && `CDB_DATA(0)));
     wire [15:0]branch_target = opcode == `JMP ? jjj : pc + d;
 
     fetch f0(clk,
@@ -103,7 +124,7 @@ module main();
     wire ib_push;
     wire [31:0]ib_push_data;
 
-    wire ib_pop = !(fus_full || ib_empty || (opcode == `JEQ && opcode_v && !jeqReady));
+    wire ib_pop = !(fus_full || ib_empty || (opcode == `JEQ && opcode_v && !jeqReady)); //TODO: undefined wire: fus_full
     wire [31:0]ib_data_out;
 
     fifo #(5,32,1) ib0(clk,
@@ -130,7 +151,7 @@ module main();
     // various dispatcher flags
 
     // Is the current instruction valid
-    wire opcode_v = !ib_empty && !waiting_jeq && !fus_full;
+    wire opcode_v = !ib_empty && !waiting_jeq && !fus_full; //TODO: undefined wire: fus_full
 
     // Is the dispatcher waiting for JEQ to be resolved
     reg waiting_jeq = 0;
@@ -139,21 +160,23 @@ module main();
     end
 
     // Is a pending JEQ ready?
-    wire jeqReady = cdb0_op == `JEQ && cdb0_v; // TODO: undefined wires: cdb0
+    wire jeqReady = `CDB_OP(0) == `JEQ && `CDB_VALID(0);
 
     // Dispatcher and regs
-    wire [31:0]va = regs[ra];
-    wire [31:0]vb = regs[rb];
 
     // this is a flag: should we write to rt?
-    wire rt_v = opcode_v && (opcode == `MOV || opcode == `ADD || opcode == `LD || opcode == `LDR); // TODO: hook this up
+    wire rt_v = opcode_v && (opcode == `MOV || opcode == `ADD || opcode == `LD || opcode == `LDR);
     // this is the val to write to rt
-    wire [31:0]rt_val = {1'h1, rs_num}; // TODO: undefined wire: rs_num
+    wire [22:16]rt_val = {1'h1, rs_num}; // TODO: undefined wire: rs_num, bounds for data width?
 
     // another flag: should we write to RS?
     wire rs_v = rt_v && opcode_v && opcode == `JEQ;
     // another value: what to write into the rs
-    wire [51:0]rs_val = 0 ;// TODO: insert stuff here
+    wire rs_r0 = opcode == `LD || opcode == `MOV ? 1 : !`REG_BUSY(ra) || `CDB_SAT(ra);
+    wire rs_r1 = opcode == `LD || opcode == `MOV ? 1 : !`REG_BUSY(rb) || `CDB_SAT(rb);
+    wire rs_val0 = opcode == `LD || opcode == `MOV ? ii : `CDB_SAT(ra) ? `CDB_VAL(ra) : `REG_VAL(ra);
+    wire rs_val1 = opcode == `LD || opcode == `MOV ? 0  : `CDB_SAT(rb) ? `CDB_VAL(rb) : `REG_VAL(rb);
+    wire [51:0]rs_val = {1'h0, 1'h1, opcode, rs_r0, `REG_SRC(ra), rs_val0, rs_r1, `REG_SRC(rb), rs_val1};
 
     // RSs
     // bits field in order
@@ -169,6 +192,8 @@ module main();
     // 4 reservation stations for fxu: 0, 1, 2, 3
     // 4 reservation stations for ld: 4, 5, 6, 7
     reg [51:0]rs[0:`NUM_RS-1];
+    // TODO: update from dispatcher and cdb
+    // TODO: present inputs to fus
 
     // Init all RSs to not busy and not issued
     integer rsn;
@@ -179,9 +204,66 @@ module main();
         end
     end
 
+    always @(posedge clk) begin
+        //TODO: stuff here
+    end
+
     // CDB
+    // bits field in order
+    // 1    valid
+    // 6    rs#
+    // 4    op
+    // 16   data
+    wire [26:0]cdb[1:0];
 
     // FUs
+    // TODO: fix everything below here
 
+    fxu fxu0(clk,
+        fxu0_rs_ready, fxu0_ready_rs_num, fxu0_op,
+        fxu0_val0, fxu0_val1,
+
+        cdb0_v, cdb0_rs_num, cdb0_data,
+
+        fxu0_jeqReady,
+
+        fxu0_busy
+    );
+
+    reg       fxu0_rs_ready = 0;
+    reg  [5:0]fxu0_ready_rs_num;
+    reg  [3:0]fxu0_op;
+    reg [15:0]fxu0_val0, fxu0_val1;
+
+    wire      fxu0_jeqReady;
+    wire      fxu0_busy;
+
+    wire fxu0_full = `BUSY(4) && `BUSY(5) && `BUSY(6) && `BUSY(7);
+    wire [5:0]fxu0_next_rs = !`BUSY(4) ? 4 :
+                       !`BUSY(5) ? 5 :
+                       !`BUSY(6) ? 6 : 7;
+
+
+    ld ld0(clk,
+        ld0_rs_ready, ld0_ready_rs_num, ld0_raddr,
+
+        cdb3_v, cdb3_rs_num, cdb3_data,
+
+        mem_raddr_ld, mem_re_ld,
+        dmem_raddr_out, dmem_data_out, dmem_ready,
+
+        ld0_busy
+    );
+
+    reg       ld0_rs_ready = 0;
+    reg  [5:0]ld0_ready_rs_num;
+    reg [15:0]ld0_raddr;
+
+    wire ld0_busy;
+
+    wire ld0_full = `BUSY(0) && `BUSY(1) && `BUSY(2) && `BUSY(3);
+    wire [5:0]ld0_next_rs = !`BUSY(0) ? 0 :
+                      !`BUSY(1) ? 1 :
+                      !`BUSY(2) ? 2 : 3;
 
 endmodule

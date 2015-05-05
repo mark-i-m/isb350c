@@ -25,6 +25,7 @@
 `define LDR 5
 
 module ld(input clk,
+    // TODO: update oupts
     // insert new instruction
     input re, input [5:0]rs_num, input [15:0]raddr,
     // output result

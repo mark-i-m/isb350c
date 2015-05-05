@@ -233,12 +233,12 @@ module main();
     // another value: what to write into the rs
     wire rs_r0 = opcode == `LD || opcode == `MOV ? 1 : !`REG_BUSY(ra) || `CDB_SAT(ra);
     wire rs_r1 = opcode == `LD || opcode == `MOV ? 1 : !`REG_BUSY(rb) || `CDB_SAT(rb);
-    wire [15:0]rs_val0 = opcode == `LD || opcode == `MOV ? ii : 
-                                                   rs_r0 ? `REG_VAL(ra) :
+    wire [15:0]rs_val0 = opcode == `LD || opcode == `MOV ? ii :
+                                          !`REG_BUSY(ra) ? `REG_VAL(ra) :
                                             `CDB_SAT(ra) ? `CDB_VAL(ra) :
                                                            16'hxxxx;
-    wire [15:0]rs_val1 = opcode == `LD || opcode == `MOV ? 0  : 
-                                                   rs_r1 ? `REG_VAL(rb) :
+    wire [15:0]rs_val1 = opcode == `LD || opcode == `MOV ? 0  :
+                                          !`REG_BUSY(rb) ? `REG_VAL(rb) :
                                             `CDB_SAT(rb) ? `CDB_VAL(rb) :
                                                            16'hxxxx;
     wire [51:0]rs_val;
@@ -412,6 +412,9 @@ module main();
 
     // TODO: remove debugging code
     wire [51:0]rs0 = rs[0];
+    wire [51:0]rs1 = rs[1];
+    wire [51:0]rs2 = rs[2];
+    wire [51:0]rs3 = rs[3];
     wire rs0_ready = readyToIssue(0);
 
     // CDB

@@ -95,6 +95,10 @@ module main();
     // registers: busy(1bit), src(6bit), val(16bit)
     reg [22:0]regs[`NUM_REGS-1:0];
 
+    // TODO: remove debugging code
+    wire [22:0]reg0 = regs[0];
+    wire cdb_sat_reg0 = `CDB_SAT(0);
+
     // Init all registers to not busy
     integer reg_init_counter;
     initial begin
@@ -108,7 +112,9 @@ module main();
     always @(posedge clk) begin
         for (regs_update_counter = 0; regs_update_counter < `NUM_REGS; regs_update_counter = regs_update_counter + 1) begin
             if (`CDB_SAT(regs_update_counter) && !(rt_v && rt == regs_update_counter)) begin
-                regs[regs_update_counter] <= {1'h0, 6'hxx, `CDB_VAL(regs_update_counter)};
+                regs[regs_update_counter][22] <= 0;
+                regs[regs_update_counter][21:16] <= 6'hxx;
+                regs[regs_update_counter][15:0] <= `CDB_VAL(regs_update_counter);
             end
             if (rt_v && rt == regs_update_counter) begin
                 regs[regs_update_counter][22:16] <= rt_val;

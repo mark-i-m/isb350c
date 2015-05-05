@@ -33,6 +33,7 @@ module ld(input clk,
     output busy
     );
 
+    assign valid_out = 0;
     /////////////////// cache and memory access ///////////////////////
 
     //// state

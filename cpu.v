@@ -58,7 +58,7 @@ module main();
     clock c0(clk);
 
     // counter
-    counter ctr(is_halted && regs_done, clk, 1,); //TODO: fix this
+    counter ctr(is_halted && regs_done, clk, opcode_v,); //TODO: fix this
 
     reg regs_done = 0;
     integer regs_halted_counter;
@@ -236,8 +236,8 @@ module main();
     // another value: what to write into the rs
     wire rs_r0 = opcode == `LD || opcode == `MOV ? 1 : !`REG_BUSY(ra) || `CDB_SAT(ra);
     wire rs_r1 = opcode == `LD || opcode == `MOV ? 1 : !`REG_BUSY(rb) || `CDB_SAT(rb);
-    wire rs_val0 = opcode == `LD || opcode == `MOV ? ii : `CDB_SAT(ra) ? `CDB_VAL(ra) : `REG_VAL(ra);
-    wire rs_val1 = opcode == `LD || opcode == `MOV ? 0  : `CDB_SAT(rb) ? `CDB_VAL(rb) : `REG_VAL(rb);
+    wire [15:0]rs_val0 = opcode == `LD || opcode == `MOV ? ii : `CDB_SAT(ra) ? `CDB_VAL(ra) : `REG_VAL(ra);
+    wire [15:0]rs_val1 = opcode == `LD || opcode == `MOV ? 0  : `CDB_SAT(rb) ? `CDB_VAL(rb) : `REG_VAL(rb);
     wire [51:0]rs_val;
     assign rs_val[51] = 0;
     assign rs_val[50] = 1;

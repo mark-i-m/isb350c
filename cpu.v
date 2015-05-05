@@ -226,13 +226,22 @@ module main();
     wire [22:16]rt_val = {1'h1, rs_num};
 
     // another flag: should we write to RS?
-    wire rs_v = rt_v && opcode_v && opcode == `JEQ;
+    wire rs_v = rt_v || (opcode_v && opcode == `JEQ);
     // another value: what to write into the rs
     wire rs_r0 = opcode == `LD || opcode == `MOV ? 1 : !`REG_BUSY(ra) || `CDB_SAT(ra);
     wire rs_r1 = opcode == `LD || opcode == `MOV ? 1 : !`REG_BUSY(rb) || `CDB_SAT(rb);
     wire rs_val0 = opcode == `LD || opcode == `MOV ? ii : `CDB_SAT(ra) ? `CDB_VAL(ra) : `REG_VAL(ra);
     wire rs_val1 = opcode == `LD || opcode == `MOV ? 0  : `CDB_SAT(rb) ? `CDB_VAL(rb) : `REG_VAL(rb);
-    wire [51:0]rs_val = {1'h0, 1'h1, opcode, rs_r0, `REG_SRC(ra), rs_val0, rs_r1, `REG_SRC(rb), rs_val1};
+    wire [51:0]rs_val;
+    assign rs_val[51] = 0;
+    assign rs_val[50] = 1;
+    assign rs_val[49:46] = opcode;
+    assign rs_val[45] = rs_r0; // R0
+    assign rs_val[44] = rs_r1; // R1
+    assign rs_val[43:38] = `REG_SRC(ra); // SRC0
+    assign rs_val[37:32] = `REG_SRC(rb); // SRC1
+    assign rs_val[31:16] = rs_val0; // VAL0
+    assign rs_val[15:0]  = rs_val1; // VAL1
 
     // RSs
     // bits field in order
@@ -313,7 +322,7 @@ module main();
                 end
             end else begin
                 // from dispatcher
-                if(rs_update_counter == rs_num) begin
+                if(rs_update_counter == rs_num && rs_v) begin
                     rs[rs_update_counter] <= rs_val;
                 end
             end
@@ -392,6 +401,10 @@ module main();
         end
     end
 
+    // TODO: remove debugging code
+    wire [51:0]rs0 = rs[0];
+    wire rs0_ready = readyToIssue(0);
+
     // CDB
     // bits field in order
     // 1    valid
@@ -399,6 +412,10 @@ module main();
     // 4    op
     // 16   data
     wire [26:0]cdb[1:0];
+
+    // TODO: remove debugging code
+    wire [26:0]cdb0 = cdb[0];
+    wire [26:0]cdb1 = cdb[1];
 
     // FUs
     // FXU

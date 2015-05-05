@@ -16,69 +16,31 @@ module fetch(input clk,
     input branch_taken, input [15:0]branch_target
     );
 
-    reg [15:0]pc_0 = 16'hFFFF, pc_1;
     reg first = 1;
 
-    reg v_0 = 0, v_1 = 0;
+    reg [15:0]pc = 16'h0000;
+    reg v = 1;
 
-    reg mem_ready_1 = 0;
-    reg [15:0]mem_data_1 = 16'hxxxx;
-
-    wire isStalling = (!mem_ready || ib_full) && !first;
-
-    wire [15:0]next_pc = pc_0 + 1;
+    wire [15:0]next_pc = first ? 0 :
+                         branch_taken ? branch_target :
+                         !ib_full ? pc + 1 :
+                         pc; // keep trying until it works
 
     always @(posedge clk) begin
-        if (!isStalling) begin
-            // If the IB has space and memory is not already
-            // processing a result, then we can send the next
-            // memory request
-            pc_0 <= next_pc;
-        end else
-        // Otherwise, if a branch was taken while we were waiting
-        if (branch_taken) begin
-             // set the new target so that next_pc is correct
-            pc_0 <= branch_target - 1;
-             // All instructions in the pipeline are invalid
-            v_0 <= 0;
-            v_1 <= 0;
-            //v_2 <= 0;
-        end
-
-        // When a request is ready move all its state down the pipeline
-        // Keep in mind that the beginning might be waiting for something
         if (mem_ready) begin
-            v_0 <= !isStalling;
-            v_1 <= v_0;
-            //v_2 <= v_1;
-
-            pc_1 <= pc_0;
-            //pc_2 <= pc_1;
-
-            mem_ready_1 <= mem_ready;
-            mem_data_1 <= mem_data_out;
-        end
-
-       // If the result was consumed and a new one is not ready yet,
-       // invalidate the consumed result
-        if (!ib_full && !mem_ready) begin
-            mem_ready_1 <= 0;
-        end
-
-        // Initial state
-        if (first) begin
-            v_0 <= 1;
-            pc_0 <= 0;
+            pc <= next_pc;
+            v <= 1;
         end
 
         first <= 0;
     end
 
     // output
-    assign ib_push = !ib_full && mem_ready_1 && v_1; // TODO: always use _1? Works for now... 
-    assign ib_push_data = {pc_1, mem_data_1};
+    assign ib_push = v && !branch_taken && mem_ready;
+    assign ib_push_data[31:16] = pc;
+    assign ib_push_data[15:0]  = mem_data_out;
 
-    assign mem_re = !isStalling;
     assign mem_raddr = next_pc;
+    assign mem_re = first || mem_ready;
 
 endmodule

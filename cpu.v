@@ -154,12 +154,18 @@ module main();
     // various dispatcher flags
 
     // Is the current instruction valid
-    wire opcode_v = !ib_empty && !waiting_jeq && !fus_full;
+    wire opcode_v = !ib_empty && !waiting_jeq && !fus_full && !is_halted;
 
     // Is the dispatcher waiting for JEQ to be resolved
     reg waiting_jeq = 0;
     always @(posedge clk) begin
         waiting_jeq <= opcode_v && opcode == `JEQ && !jeqReady;
+    end
+
+    // Is the processor halted?
+    reg is_halted = 0;
+    always @(posedge clk) begin
+        is_halted <= opcode_v && opcode == `HLT;
     end
 
     // Is a pending JEQ ready?
@@ -375,7 +381,7 @@ module main();
 
     ld ld0(clk,
         ld0_rs_ready, ld0_ready_rs_num, ld0_op,
-        ld0_val0, fxu0_val1,
+        ld0_val0, ld0_val1,
 
         `CDB_VALID(1), `CDB_RS(1), `CDB_OP(1), `CDB_DATA(1),
 

@@ -1,6 +1,10 @@
 `timescale 1ps/1ps
 
 // TODO: pipeline me!
+//
+// TODO: update these comments
+
+// No icache because mem latency is 1 cycle
 
 // A memory system that integrates the given memory module. It keeps
 // a FIFO queue of data requests and instruction requests. Data requests
@@ -40,18 +44,13 @@ module memcontr(input clk,
     output dready, output [15:0]draddr_out, output [15:0]ddata);
 
     // state
-    reg [3:0]istate = `W0;
     reg [3:0]dstate = `W0;
 
     // memory
-    mem mem0(clk, imem_re, imem_raddr, imem_ready, imem_rdata,
+    mem mem0(clk, re0, raddr0, iready, idata,
                   dmem_re, dmem_raddr, dmem_ready, dmem_rdata);
 
-    reg imem_re = 0;
-    reg [15:0]imem_raddr = 16'hxxxx;
-
-    wire imem_ready;
-    wire [15:0]imem_rdata;
+    assign iraddr_out = raddr0;
 
     reg dmem_re = 0;
     reg [15:0]dmem_raddr = 16'hxxxx;
@@ -69,31 +68,8 @@ module memcontr(input clk,
     wire dq_full, dq_empty;
     wire [15:0]ddata_out;
 
-    fifo #(10) iq(clk, ipush, idata_in, iq_full,
-                      ipop, idata_out, iq_empty, 0);
-
-    reg ipush = 0, ipop = 0;
-    reg [15:0]idata_in = 16'hxxxx;
-
-    wire iq_full, iq_empty;
-    wire [15:0]idata_out;
-
     // logic
     always @(posedge clk) begin
-        // instruction requests
-        if (re0) begin
-            // enqueue the request
-            ipush <= 1;
-            idata_in <= raddr0;
-
-            if (iq_full) begin // should never happen
-                $display("i queue full");
-                $finish;
-            end
-        end else begin
-            ipush <= 0;
-        end
-
         // data requests
         if (re1) begin
             // enqueue the request
@@ -109,47 +85,6 @@ module memcontr(input clk,
         end
 
         // state update
-        case(istate)
-            `W0 : begin
-                // check for new memory requests
-                if (!iq_empty) begin
-                    ipop <= 1;
-                    istate <= `I0;
-                end
-            end
-            `I0 : begin
-                // stop popping iq
-                ipop <= 0;
-                istate <= `I1;
-            end
-            `I1 : begin
-                // get value from dq and submit to mem
-                imem_re <= 1;
-                imem_raddr <= idata_out;
-
-                istate <= `M0;
-            end
-            `M0 : begin
-                // stop asking for memory
-                imem_re <= 0;
-
-                // when the request is ready
-                if (imem_ready) begin
-                    // check for the next one
-                    if (!iq_empty) begin
-                        ipop <= 1;
-                        istate <= `I0;
-                    end else begin
-                        istate <= `W0;
-                    end
-                end
-            end
-
-            default : begin
-                $display("unknown memory system state %d", istate);
-                $finish;
-            end
-        endcase
         case(dstate)
             `W0 : begin
                 // check for new memory requests
@@ -194,10 +129,6 @@ module memcontr(input clk,
     end
 
     // output
-    assign iready = imem_ready;
-    assign idata = imem_rdata;
-    assign iraddr_out = imem_raddr;
-
     assign dready = dmem_ready;
     assign ddata = dmem_rdata;
     assign draddr_out = dmem_raddr;

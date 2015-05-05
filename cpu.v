@@ -87,7 +87,7 @@ module main();
             $display("#13:%x",`REG_VAL(13));
             $display("#14:%x",`REG_VAL(14));
             $display("#15:%x",`REG_VAL(15));
-            #100;
+            #1001; // wait until the counter outputs cycle counts
             $finish;
         end
     end
@@ -192,7 +192,7 @@ module main();
     // various dispatcher flags
 
     // Should we pop next cycle?
-    wire should_pop = !ib_empty && !waiting_jeq && !fus_full && !is_halted;
+    wire should_pop = !ib_empty && !waiting_jeq && !fus_full && !is_halted && !(opcode_v && opcode == `HLT);
 
     // Is the current instruction valid
     reg opcode_v = 0;

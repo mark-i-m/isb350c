@@ -79,7 +79,7 @@ module main();
                 regs[regs_update_counter] <= {1'h0, 6'hxx, `CDB_VAL(regs_update_counter)};
             end
             if (rt_v && rt == regs_update_counter) begin
-                regs[regs_update_counter] <= rt_val;
+                regs[regs_update_counter][22:16] <= rt_val;
             end
         end
     end
@@ -96,7 +96,7 @@ module main();
     wire imem_re;
     wire [15:0]imem_raddr;
 
-    wire dmem_re; // TODO: unused wire
+    wire dmem_re;
     wire [15:0]dmem_raddr;
 
     memcontr i0(clk,
@@ -170,7 +170,7 @@ module main();
     // this is a flag: should we write to rt?
     wire rt_v = opcode_v && (opcode == `MOV || opcode == `ADD || opcode == `LD || opcode == `LDR);
     // this is the val to write to rt
-    wire [22:16]rt_val = {1'h1, rs_num}; // TODO: bounds for data width?
+    wire [22:16]rt_val = {1'h1, rs_num};
 
     // another flag: should we write to RS?
     wire rs_v = rt_v && opcode_v && opcode == `JEQ;
@@ -195,10 +195,22 @@ module main();
     // 4 reservation stations for fxu: 0, 1, 2, 3
     // 4 reservation stations for ld: 4, 5, 6, 7
     reg [51:0]rs[0:`NUM_RS-1];
-    // TODO: present inputs to fus
 
-    wire fus_full = ; //TODO: stuff here
-    wire [5:0]rs_num = ; //TODO:stuff here
+    wire fxu0_full = `RS_BUSY(0) && `RS_BUSY(1) && `RS_BUSY(2) && `RS_BUSY(3);
+    wire [5:0]fxu0_next_rs = !`RS_BUSY(0) ? 0 :
+                       !`RS_BUSY(1) ? 1 :
+                       !`RS_BUSY(2) ? 2 : 3;
+
+    wire ld0_full = `RS_BUSY(4) && `RS_BUSY(5) && `RS_BUSY(6) && `RS_BUSY(7);
+    wire [5:0]ld0_next_rs = !`RS_BUSY(4) ? 4 :
+                      !`RS_BUSY(5) ? 5 :
+                      !`RS_BUSY(6) ? 6 : 7;
+
+    wire fus_full = (opcode == `MOV || opcode == `ADD || opcode == `JEQ) ? fxu0_full :
+                    (opcode == `LD  || opcode == `LDR) ? ld0_full : 0;
+
+    wire [5:0]rs_num = (opcode == `MOV || opcode == `ADD || opcode == `JEQ) ? fxu0_next_rs :
+                       (opcode == `LD  || opcode == `LDR) ? ld0_next_rs : 0;
 
     // Init all RSs to not busy and not issued
     integer rsn;
@@ -206,7 +218,7 @@ module main();
         for (rsn = 0 ; rsn < `NUM_RS; rsn = rsn + 1) begin
             `RS_ISSUED(rsn) <= 0;
             `RS_BUSY(rsn) <= 0;
-        end
+ yntax      end
     end
 
     function cdbSatisfiesRs;
@@ -221,6 +233,7 @@ module main();
     integer rs_update_counter, cdbn;
     always @(posedge clk) begin
         // TODO: update ISSUED bit
+        // TODO: present inputs to fus
         for (rs_update_counter = 0; rs_update_counter < `NUM_RS; rs_update_counter = rs_update_counter + 1) begin
             if (`RS_BUSY(rs_update_counter)) begin
                 // from CDB
@@ -274,13 +287,7 @@ module main();
     reg  [3:0]fxu0_op;
     reg [15:0]fxu0_val0, fxu0_val1;
 
-    wire      fxu0_jeqReady;
     wire      fxu0_busy;
-
-    wire fxu0_full = `RS_BUSY(4) && `RS_BUSY(5) && `RS_BUSY(6) && `RS_BUSY(7);
-    wire [5:0]fxu0_next_rs = !`RS_BUSY(4) ? 4 :
-                       !`RS_BUSY(5) ? 5 :
-                       !`RS_BUSY(6) ? 6 : 7;
 
 
     ld ld0(clk,
@@ -288,7 +295,7 @@ module main();
 
         cdb3_v, cdb3_rs_num, cdb3_data,
 
-        mem_raddr_ld, mem_re_ld,
+        dmem_raddr, dmem_re,
         dmem_raddr_out, dmem_data_out, dmem_ready,
 
         ld0_busy
@@ -299,10 +306,5 @@ module main();
     reg [15:0]ld0_raddr;
 
     wire ld0_busy;
-
-    wire ld0_full = `RS_BUSY(0) && `RS_BUSY(1) && `RS_BUSY(2) && `RS_BUSY(3);
-    wire [5:0]ld0_next_rs = !`RS_BUSY(0) ? 0 :
-                      !`RS_BUSY(1) ? 1 :
-                      !`RS_BUSY(2) ? 2 : 3;
 
 endmodule

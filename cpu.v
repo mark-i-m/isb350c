@@ -58,7 +58,39 @@ module main();
     clock c0(clk);
 
     // counter
-    counter ctr(0, clk, 1,);
+    counter ctr(is_halted && regs_done, clk, 1,); //TODO: fix this
+
+    reg regs_done = 0;
+    integer regs_halted_counter;
+    always @(posedge clk) begin
+        regs_done = 1;
+        for (regs_halted_counter = 0; regs_halted_counter < `NUM_REGS; regs_halted_counter = regs_halted_counter + 1) begin
+            regs_done = regs_done && !`REG_BUSY(regs_halted_counter);
+        end
+    end
+
+    always @(posedge clk) begin
+        if (is_halted && regs_done) begin
+            $display("#0:%x",`REG_VAL(0));
+            $display("#1:%x",`REG_VAL(1));
+            $display("#2:%x",`REG_VAL(2));
+            $display("#3:%x",`REG_VAL(3));
+            $display("#4:%x",`REG_VAL(4));
+            $display("#5:%x",`REG_VAL(5));
+            $display("#6:%x",`REG_VAL(6));
+            $display("#7:%x",`REG_VAL(7));
+            $display("#8:%x",`REG_VAL(8));
+            $display("#9:%x",`REG_VAL(9));
+            $display("#10:%x",`REG_VAL(10));
+            $display("#11:%x",`REG_VAL(11));
+            $display("#12:%x",`REG_VAL(12));
+            $display("#13:%x",`REG_VAL(13));
+            $display("#14:%x",`REG_VAL(14));
+            $display("#15:%x",`REG_VAL(15));
+            #100;
+            $finish;
+        end
+    end
 
     // registers: busy(1bit), src(6bit), val(16bit)
     reg [22:0]regs[`NUM_REGS-1:0];
@@ -110,7 +142,7 @@ module main();
        dmem_data_out);
 
     // fetch
-    wire branch_taken = opcode_v && ((opcode == `JMP) || (opcode == `JEQ && jeqReady && `CDB_DATA(0)));
+    wire branch_taken = opcode_v && ((opcode == `JMP) || (opcode == `JEQ && jeqReady && `CDB_DATA(0) && `CDB_VALID(0))) && !first;
     wire [15:0]branch_target = opcode == `JMP ? jjj : pc + d;
 
     fetch f0(clk,
@@ -127,13 +159,20 @@ module main();
     wire ib_push;
     wire [31:0]ib_push_data;
 
-    wire ib_pop = !(fus_full || ib_empty || (opcode == `JEQ && opcode_v && !jeqReady));
+    reg first = 1;
+    wire ib_pop = should_pop;//!(fus_full || ib_empty || (opcode == `JEQ && opcode_v && !jeqReady) || is_halted);
     wire [31:0]ib_data_out;
 
     fifo #(5,32,1) ib0(clk,
         ib_push, ib_push_data, ib_full,
         ib_pop, ib_data_out, ib_empty,
         ib_flush);
+
+    always @(posedge clk) begin
+        if (!ib_empty) begin
+            first <= 0;
+        end
+    end
 
     // Dispatch
     // This is the dispatcher logic. It is mostly a big block
@@ -153,8 +192,14 @@ module main();
 
     // various dispatcher flags
 
+    // Should we pop next cycle?
+    wire should_pop = !ib_empty && !waiting_jeq && !fus_full && !is_halted;
+
     // Is the current instruction valid
-    wire opcode_v = !ib_empty && !waiting_jeq && !fus_full && !is_halted;
+    reg opcode_v = 0;
+    always @(posedge clk) begin
+        opcode_v <= should_pop;
+    end
 
     // Is the dispatcher waiting for JEQ to be resolved
     reg waiting_jeq = 0;
@@ -165,7 +210,9 @@ module main();
     // Is the processor halted?
     reg is_halted = 0;
     always @(posedge clk) begin
-        is_halted <= opcode_v && opcode == `HLT;
+        if (!is_halted) begin
+            is_halted <= opcode_v && opcode == `HLT;
+        end
     end
 
     // Is a pending JEQ ready?

@@ -180,7 +180,7 @@ module main();
     wire ib_push;
     wire [31:0]ib_push_data;
 
-    wire ib_pop = !ib_empty && ((opcode == `MOV || opcode == `ADD || opcode == `LD || opcode == `LDR) ? !fus_full : 
+    wire ib_pop = !ib_empty && ((opcode == `MOV || opcode == `ADD || opcode == `LD || opcode == `LDR) ? !fus_full :
                                 opcode == `JEQ ? (jeqReady && `CDB_DATA(0) == 0) : 0);
     wire [31:0]ib_data_out;
 

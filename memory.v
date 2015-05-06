@@ -30,8 +30,6 @@
 `define W0 0 // Idle
 `define D0 1 // Data request
 `define D1 2
-`define I0 3 // Instr request
-`define I1 4
 `define M0 5 // waiting for memory
 
 module memcontr(input clk,
@@ -50,8 +48,10 @@ module memcontr(input clk,
     mem mem0(clk, re0, raddr0, iready, idata,
                   dmem_re, dmem_raddr, dmem_ready, dmem_rdata);
 
+    // Fetch
     assign iraddr_out = raddr0;
 
+    // Data
     reg dmem_re = 0;
     reg [15:0]dmem_raddr = 16'hxxxx;
 
@@ -59,11 +59,10 @@ module memcontr(input clk,
     wire [15:0]dmem_rdata;
 
     // queues -- each 8 long, which should be more than enough
-    fifo #(5) dq(clk, dpush, ddata_in, dq_full,
+    fifo #(5) dq(clk, re1, raddr1, dq_full,
                       dpop, ddata_out, dq_empty, 0);
 
-    reg dpush = 0, dpop = 0;
-    reg [15:0]ddata_in = 16'hxxxx;
+    reg dpop = 0;
 
     wire dq_full, dq_empty;
     wire [15:0]ddata_out;
@@ -72,16 +71,10 @@ module memcontr(input clk,
     always @(posedge clk) begin
         // data requests
         if (re1) begin
-            // enqueue the request
-            dpush <= 1;
-            ddata_in <= raddr1;
-
             if (dq_full) begin // should never happen
                 $display("d queue full");
                 $finish;
             end
-        end else begin
-            dpush <= 0;
         end
 
         // state update
@@ -89,35 +82,23 @@ module memcontr(input clk,
             `W0 : begin
                 // check for new memory requests
                 if (!dq_empty) begin
-                    dpop <= 1;
-                    dstate <= `D0;
-                end
-            end
-            `D0 : begin
-                // stop popping dq
-                dpop <= 0;
-                dstate <= `D1;
-            end
-            `D1 : begin
-                // get value from dq and submit to mem
-                dmem_re <= 1;
-                dmem_raddr <= ddata_out;
+                    dstate <= `M0;
 
-                dstate <= `M0;
+                    dpop <= 1;
+
+                    dmem_re <= 1;
+                    dmem_raddr <= ddata_out;
+                end
             end
             `M0 : begin
                 // stop asking for memory
                 dmem_re <= 0;
+                dpop <= 0;
 
                 // when the request is ready
                 if (dmem_ready) begin
                     // check for the next one
-                    if (!dq_empty) begin
-                        dpop <= 1;
-                        dstate <= `D0;
-                    end else begin
-                        dstate <= `W0;
-                    end
+                    dstate <= `W0;
                 end
             end
 

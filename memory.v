@@ -1,22 +1,13 @@
 `timescale 1ps/1ps
 
-// TODO: pipeline me!
+// The is a simple memory controller/bridge that queues up requests
+// for memory addresses and broadcasts the results from memory onto
+// the memory bus.
 //
-// TODO: update these comments
-
-// No icache because mem latency is 1 cycle
-
-// A memory system that integrates the given memory module. It keeps
-// a FIFO queue of data requests and instruction requests. Data requests
-// have a higher priority.
+// Fetch requests are passed directly to memory, since there is no
+// latency (the magic 1 cycle fetch port).
 //
-// Following the protocol below submits a request. When the request is done,
-// the memory system will broadcast the memory address and data and set
-// memReady = 1. Then, whoever cares can listen in and take whatever values
-// they want.
-//
-// For instruction requests, use the first port.
-// For data requests, use the second port, which has higher priority.
+// Data requests are queued up and submitted when memory is ready.
 //
 // Protocol:
 //  set readEnable = 1
@@ -58,7 +49,7 @@ module memcontr(input clk,
     wire dmem_ready;
     wire [15:0]dmem_rdata;
 
-    // queues -- each 8 long, which should be more than enough
+    // data request queues
     fifo #(5) dq(clk, re1, raddr1, dq_full,
                       dpop, ddata_out, dq_empty, 0);
 
@@ -69,12 +60,9 @@ module memcontr(input clk,
 
     // logic
     always @(posedge clk) begin
-        // data requests
-        if (re1) begin
-            if (dq_full) begin // should never happen
-                $display("d queue full");
-                $finish;
-            end
+        if (re1 && dq_full) begin // should never happen
+            $display("d queue full");
+            $finish;
         end
 
         // state update

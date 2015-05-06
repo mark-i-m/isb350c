@@ -6,21 +6,19 @@ cpu : $(VFILES) Makefile
 run : cpu
 	timeout 3 ./cpu
 
-run% : cpu mem%.hex
-	@cp mem$*.hex mem.hex
+run% : cpu test%.hex
+	@cp tests/test$*.hex test.hex
 	make run
 
 clean :
-	rm -rf cpu mem.hex test.ok test.raw test.cycles
-	rm -rf *.out
-	rm -rf *.vcd
+	rm -rf cpu test.hex test.ok test.raw test.cycles *.out *.vcd
 
-test : $(sort $(patsubst %.ok,%,$(wildcard test?.ok)))
+test : $(sort $(patsubst tests/%.ok,%,$(wildcard tests/test?.ok)))
 
-test% : cpu mem%.hex
+test% : cpu tests/test%.hex
 	@echo -n "test$* ... "
-	@cp mem$*.hex mem.hex
-	@cp test$*.ok test.ok
+	@cp tests/test$*.hex test.hex
+	@cp tests/test$*.ok test.ok
 	@timeout 3 ./cpu > test.raw 2>&1
 	-@egrep "^#" test.raw > test.out
 	-@egrep "^@" test.raw > test.cycles
@@ -29,5 +27,5 @@ test% : cpu mem%.hex
 # keep make from deleting .hex files
 .SECONDARY:
 
-mem%.hex : test%.asm
-	./as.sh $^ $@
+tests/test%.hex : tests/test%.asm
+	./tests/as.sh $^ $@

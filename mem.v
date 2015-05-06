@@ -31,7 +31,7 @@ module mem(input clk,
 
     /* Simulation -- read initial content from file */
     initial begin
-        $readmemh("mem.hex",data);
+        $readmemh("test.hex",data);
     end
 
     reg [15:0]fetchPtr = 16'hxxxx;

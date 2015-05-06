@@ -1,4 +1,5 @@
 mem.hex
+test.hex
 cpu
 cpu.vcd
 test.ok

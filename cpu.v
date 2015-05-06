@@ -163,7 +163,7 @@ module main();
        dmem_data_out);
 
     // fetch
-    wire branch_taken = /*!ib_empty &&*/ !first && ((opcode == `JMP && !wasJmp) || (opcode == `JEQ && jeqReady && `CDB_DATA(0) == 1));
+    wire branch_taken = !ib_empty && ((opcode == `JMP) || (opcode == `JEQ && jeqReady && `CDB_DATA(0) == 1));
     wire [15:0]branch_target = opcode == `JMP ? jjj : pc + d;
 
     fetch f0(clk,
@@ -180,25 +180,14 @@ module main();
     wire ib_push;
     wire [31:0]ib_push_data;
 
-    wire ib_pop = !ib_empty && (first ? 1 : (opcode == `MOV || opcode == `ADD || opcode == `LD || opcode == `LDR) ? !fus_full :
-                                 opcode == `JMP ? 1 :
-                                 opcode == `JEQ ? jeqReady || jeqWasReady :
-                                 0);
+    wire ib_pop = !ib_empty && ((opcode == `MOV || opcode == `ADD || opcode == `LD || opcode == `LDR) ? !fus_full : 
+                                opcode == `JEQ ? (jeqReady && `CDB_DATA(0) == 0) : 0);
     wire [31:0]ib_data_out;
 
     fifo #(5,32,1) ib0(clk,
         ib_push, ib_push_data, ib_full,
         ib_pop, ib_data_out, ib_empty,
         ib_flush);
-
-    reg first = 1;
-    reg wasJmp = 0;
-    always @(posedge clk) begin
-        if (ib_pop) first <= 0;
-        if (opcode == `JMP) wasJmp <= 1;
-        else wasJmp <= 0;
-    end
-
 
     // Dispatch
     // This is the dispatcher logic. It is mostly a big block
@@ -220,7 +209,6 @@ module main();
 
     // Is the dispatcher waiting for JEQ to be resolved
     reg waiting_jeq = 0;
-    reg jeqWasReady = 0;
     always @(posedge clk) begin
         if (!ib_empty && opcode == `JEQ) begin
             if (!waiting_jeq) begin
@@ -228,12 +216,6 @@ module main();
             end else begin
                 waiting_jeq <= !jeqReady;
             end
-        end else if (opcode == `JEQ) begin
-            if (waiting_jeq && jeqReady) begin
-                jeqWasReady <= 1;
-            end
-        end else begin
-            jeqWasReady <= 0;
         end
     end
 
@@ -241,7 +223,7 @@ module main();
     reg is_halted = 0;
     always @(posedge clk) begin
         if (!is_halted) begin
-            is_halted <= !ib_empty && !first && opcode == `HLT;
+            is_halted <= !ib_empty && opcode == `HLT;
         end
     end
 

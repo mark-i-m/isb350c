@@ -43,7 +43,6 @@ module fifo(input clk,
         end
         // pop
         if (pop && !q_empty && !flush) begin
-            data_out_reg <= data[head];
             head <= head == ((1 << SIZE) -1) ? 0 : head + 1;
             if (DEBUG) $display("%m[%d] pop  %x", head, data[head]);
         end
@@ -57,10 +56,8 @@ module fifo(input clk,
     end
 
     // output
-    reg [WIDTH-1:0]data_out_reg;
-
-    assign data_out = data_out_reg;
+    assign data_out = data[head];
     assign q_full = n == (1 << SIZE);
-    assign q_empty = n == 0 || flush;
+    assign q_empty = n == 0;
 
 endmodule

@@ -1,10 +1,23 @@
 `timescale 1ps/1ps
 
-// A LD unit for the Tomasulo algo
+// A LD unit 
 //
 // It can do the following operations:
 //
 //  LD, LDR
+//
+// It is implemented as a state machine for simplicity.
+//
+// Should work for any memory latency, but is optimized for the long
+// 100 cycle latency data port.
+//
+// It has 3 levels of caches. Each is 4 words and fully associative.
+// Evictions from one level go to the next level. Each extra level has
+// an extra cycle of latency.
+//
+// TODO:
+// Also there is a prefetcher. It trains on the L3 access stream and inserts
+// into the L3.
 
 // Memory access states:
 `define W0 0 //idle
@@ -77,7 +90,8 @@ module ld(input clk,
     // update state
     always @(posedge clk) begin
         case(state)
-            `W0 : begin
+            `W0 : begin // idle?
+                // waiting for next access
                 valid_out_reg <= 0;
                 res_out_reg <= 16'hxxxx;
 
@@ -86,20 +100,21 @@ module ld(input clk,
                 op_out_reg <= op;
                 rs_num_out_reg <= rs_num;
 
+                // if there is an access, check L1
                 if(valid) begin
                     state <= `L1;
                 end
             end
             `L1 : begin
-                if (l1d_hit) begin
+                if (l1d_hit) begin // if hit, return value
                     valid_out_reg <= 1;
                     res_out_reg <= l1d_data;
                     state <= `W0;
-                end else begin
+                end else begin // else, check next level
                     state <= `L2;
                 end
             end
-            `L2 : begin
+            `L2 : begin // same as above
                 if (l2d_hit) begin
                     valid_out_reg <= 1;
                     res_out_reg <= l2d_data;
@@ -109,20 +124,22 @@ module ld(input clk,
                 end
             end
             `L3 : begin
-                if(l3d_hit) begin
+                if(l3d_hit) begin // if hit, same as above
                     valid_out_reg <= 1;
                     res_out_reg <= l3d_data;
                     state <= `W0;
-                end else begin
+                end else begin // otherwise, submit mem request
                     mem_re_reg <= 1;
                     mem_raddr_reg <= raddr_in;
                     state <= `M0;
                 end
             end
             `M0 : begin
+                // stop submitting request, as per protocol
                 mem_re_reg <= 0;
                 mem_raddr_reg <= 16'hxxxx;
 
+                // when the value is broadcast on memory bus, return it
                 if(mem_ready && mem_addr_out == raddr_in) begin
                     valid_out_reg <= 1;
                     res_out_reg <= mem_data_out;

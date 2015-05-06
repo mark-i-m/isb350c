@@ -1,10 +1,13 @@
 `timescale 1ps/1ps
 
-// Implementation of a Fetch Unit that places instructions in a buffer
+// A simple pipelined Fetch Unit
 //
-// If the buffer is full, fetch stops
-//
-// Assumes the magic 1 cycle fetch port, but should work correctly regardless
+// It fetches at the current PC and pushes to the tail of the IB
+// It does not flush or pop the buffer if there is a branch.
+// 
+// It should work for any memory latency, but is optimized for the magic
+// 1 cycle fetch port. If anything happens, it discards the result and
+// tries again.
 
 module fetch(input clk,
     // instruction buffer
@@ -16,17 +19,24 @@ module fetch(input clk,
     input branch_taken, input [15:0]branch_target
     );
 
+    // is this the first instr?
+    // if so, we do not want to wait for mem_ready
     reg first = 1;
 
+    // current fetch PC (the address mem is working on)
     reg [15:0]pc = 16'h0000;
+    // is this pc valid?
     reg v = 1;
 
+    // what is the next PC? 
     wire [15:0]next_pc = first ? 0 :
                          branch_taken ? branch_target :
                          !ib_full ? pc + 1 :
                          pc; // keep trying until it works
 
+    // update every cycle
     always @(posedge clk) begin
+        // if mem is ready, send next request
         if (mem_ready) begin
             pc <= next_pc;
             v <= 1;

@@ -1,12 +1,15 @@
 `timescale 1ps/1ps
 
-// Implementation of an FXU for the Tomasulo algo
+// Implementation of an FXU
 //
 // It can do the following operations:
 //
 //  MOV, ADD, JEQ
 //
-// When a jeq completed, res_out = 1 if taken
+// When a jeq completed, res_out = 1 if taken; 0 else
+//
+// The value is guaranteed to be correct if valid_out is true, but
+// no guarantees otherwise
 
 `define MOV 0
 `define ADD 1

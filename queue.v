@@ -3,18 +3,20 @@
 // Implements a FIFO queue as a circular buffer. The number of
 // entries is specified by the user. The default is 1 << 5 = 32.
 //
+// It is synchronous with the clk.
+//
 // When push is true, the value of data_in is queued.
-// When pop is true, the head of the queue is dequeued and
-// returned in data_out.
+// When pop is true, the head of the queue is dequeued.
+// When flush is true, the queue is emptied.
 //
 // If the queue is full, then q_full = 1
 // If the queue is empty, the q_empty = 1
-// These two values are not synchronous
 //
-// If q_full && push, then the value is not pushed
-// If q_empty && pop, then data_out is undefined
+// Pushing to a full queue or popping from an empty queue are
+// undefined behavior.
 //
-// The queue is synchronous
+// The head of the queue is always presented at data_out if the
+// queue is not empty. Otherwise, the value is undefined.
 
 module fifo(input clk,
             input push, input [WIDTH-1:0]data_in, output q_full,
@@ -23,7 +25,7 @@ module fifo(input clk,
 
     parameter SIZE = 5; // log_2 of the number of entries
     parameter WIDTH = 16; // number of bits per entry
-    parameter DEBUG = 0;
+    parameter DEBUG = 0; // print debug statements?
 
     // head and tail pointers
     reg [SIZE:0]head = 0; // first valid entry
@@ -33,7 +35,7 @@ module fifo(input clk,
     // data space
     reg [WIDTH-1:0]data[(1<<SIZE)-1:0];
 
-    // logic
+    // update on clk tick
     always @(posedge clk) begin
         // push
         if (push && !q_full && !flush) begin
@@ -46,6 +48,7 @@ module fifo(input clk,
             head <= head == ((1 << SIZE) -1) ? 0 : head + 1;
             if (DEBUG) $display("%m[%d] pop  %x", head, data[head]);
         end
+        // flush
         if (flush) begin
             head <= tail;
             n <= 0;
@@ -56,7 +59,7 @@ module fifo(input clk,
     end
 
     // output
-    assign data_out = data[head];
+    assign data_out = data[head]; // always present head
     assign q_full = n == (1 << SIZE);
     assign q_empty = n == 0;
 

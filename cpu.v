@@ -1,6 +1,13 @@
 `timescale 1ps/1ps
 
 // Simple Tomasulo processor
+//
+// 2 FUs:
+//  * FXU
+//  * LD unit
+//
+// Each one has 4 RSs and its own lane in the CDB
+
 
 // Lots of MACROS to make Verilog more likeable. Imagine macros making
 // a language better!
@@ -61,6 +68,7 @@ module main();
     counter ctr(stop_ctr, clk, ib_pop,);
     reg stop_ctr = 0;
 
+    // wait until all regs are written back before halting
     reg regs_done = 0;
     integer regs_halted_counter;
     always @(posedge clk) begin
@@ -70,6 +78,7 @@ module main();
         end
     end
 
+    // simulation: print regs before halting
     always @(posedge clk) begin
         if (is_halted && regs_done && !stop_ctr) begin
             $display("#0:%x",`REG_VAL(0));
@@ -92,27 +101,12 @@ module main();
         end
     end
 
-    // registers: busy(1bit), src(6bit), val(16bit)
+    // registers
+    // bits field in order
+    // busy 1
+    // src  6
+    // val  16
     reg [22:0]regs[`NUM_REGS-1:0];
-
-    // TODO: remove debugging code
-    wire cdb_sat_reg0 = `CDB_SAT(0);
-    wire [22:0]regs0 = regs[0];
-    wire [22:0]regs1 = regs[1];
-    wire [22:0]regs2 = regs[2];
-    wire [22:0]regs3 = regs[3];
-    wire [22:0]regs4 = regs[4];
-    wire [22:0]regs5 = regs[5];
-    wire [22:0]regs6 = regs[6];
-    wire [22:0]regs7 = regs[7];
-    wire [22:0]regs8 = regs[8];
-    wire [22:0]regs9 = regs[9];
-    wire [22:0]regs10 = regs[10];
-    wire [22:0]regs11 = regs[11];
-    wire [22:0]regs12 = regs[12];
-    wire [22:0]regs13 = regs[13];
-    wire [22:0]regs14 = regs[14];
-    wire [22:0]regs15 = regs[15];
 
     // Init all registers to not busy
     integer reg_init_counter;
@@ -126,11 +120,13 @@ module main();
     integer regs_update_counter;
     always @(posedge clk) begin
         for (regs_update_counter = 0; regs_update_counter < `NUM_REGS; regs_update_counter = regs_update_counter + 1) begin
+            // if this reg is satisfied by the CDB, write the result back
             if (`CDB_SAT(regs_update_counter) && !(rt_v && rt == regs_update_counter)) begin
                 regs[regs_update_counter][22] <= 0;
                 regs[regs_update_counter][21:16] <= 6'hxx;
                 regs[regs_update_counter][15:0] <= `CDB_VAL(regs_update_counter);
             end
+            // if we dispatched an instruction, write the src and mark busy
             if (rt_v && rt == regs_update_counter) begin
                 regs[regs_update_counter][22:16] <= rt_val;
             end
@@ -138,6 +134,8 @@ module main();
     end
 
     // memory
+
+    // these wires form a sort of memory bus
     wire [15:0]imem_raddr_out;
     wire [15:0]imem_data_out;
     wire imem_ready;
@@ -163,6 +161,8 @@ module main();
        dmem_data_out);
 
     // fetch
+
+    // was a branch taken? to where?
     wire branch_taken = !ib_empty && ((opcode == `JMP) || (opcode == `JEQ && jeqReady && `CDB_DATA(0) == 1));
     wire [15:0]branch_target = opcode == `JMP ? jjj : pc + d;
 
@@ -192,7 +192,7 @@ module main();
     // Dispatch
     // This is the dispatcher logic. It is mostly a big block
     // of combinational logic that was best in its own file...
-    // but Verilog =[
+    // but Verilog :(
 
     // Decode the instructions
     wire [15:0]pc = ib_data_out[31:16];
@@ -206,6 +206,9 @@ module main();
     wire [3:0]d = inst[3:0];
 
     // various dispatcher flags
+
+    // Is a pending JEQ ready?
+    wire jeqReady = `CDB_OP(0) == `JEQ && `CDB_VALID(0);
 
     // Is the dispatcher waiting for JEQ to be resolved
     reg waiting_jeq = 0;
@@ -227,19 +230,16 @@ module main();
         end
     end
 
-    // Is a pending JEQ ready?
-    wire jeqReady = `CDB_OP(0) == `JEQ && `CDB_VALID(0);
+    // dispatcher interations with RSs and regs
 
-    // Dispatcher and regs
-
-    // this is a flag: should we write to rt?
+    // should we write to rt?
     wire rt_v = !ib_empty && !fus_full && opcode != `JMP && opcode != `JEQ && opcode != `HLT;
-    // this is the val to write to rt
+    // value to write
     wire [22:16]rt_val = {1'h1, rs_num};
 
-    // another flag: should we write to RS?
+    // should we write to RS?
     wire rs_v = !ib_empty && !fus_full && opcode != `JMP && !(opcode == `JEQ && waiting_jeq) && opcode != `HLT;
-    // another value: what to write into the rs
+    // value to write into the rs
     wire rs_r0 = opcode == `LD || opcode == `MOV ? 1 : !`REG_BUSY(ra) || `CDB_SAT(ra);
     wire rs_r1 = opcode == `LD || opcode == `MOV ? 1 : !`REG_BUSY(rb) || `CDB_SAT(rb);
     wire [15:0]rs_val0 = opcode == `LD || opcode == `MOV ? ii :
@@ -271,24 +271,30 @@ module main();
     // 32   val
     // -----------
     // 51   total
-
+    //
     // 4 reservation stations for fxu: 0, 1, 2, 3
     // 4 reservation stations for ld: 4, 5, 6, 7
+
     reg [51:0]rs[0:`NUM_RS-1];
 
+    // Are all RSs for the FXU full?
     wire fxu0_full = `RS_BUSY(0) && `RS_BUSY(1) && `RS_BUSY(2) && `RS_BUSY(3);
+    // RS# of next free RS for FXU
     wire [5:0]fxu0_next_rs = !`RS_BUSY(0) ? 0 :
                        !`RS_BUSY(1) ? 1 :
                        !`RS_BUSY(2) ? 2 : 3;
 
+    // All RSs for LD full?
     wire ld0_full = `RS_BUSY(4) && `RS_BUSY(5) && `RS_BUSY(6) && `RS_BUSY(7);
+    // Next RS# for LD unit
     wire [5:0]ld0_next_rs = !`RS_BUSY(4) ? 4 :
                       !`RS_BUSY(5) ? 5 :
                       !`RS_BUSY(6) ? 6 : 7;
 
+    // all RSs for the opcode full?
     wire fus_full = (opcode == `MOV || opcode == `ADD || opcode == `JEQ) ? fxu0_full :
                     (opcode == `LD  || opcode == `LDR) ? ld0_full : 0;
-
+    // Next RS# for the given opcode
     wire [5:0]rs_num = (opcode == `MOV || opcode == `ADD || opcode == `JEQ) ? fxu0_next_rs :
                        (opcode == `LD  || opcode == `LDR) ? ld0_next_rs : 0;
 
@@ -301,6 +307,9 @@ module main();
         end
     end
 
+    // convenience functions for RSs
+
+    // Does the CDB lane satisfy the RS
     function cdbSatisfiesRs;
         input [5:0]rs_num_to_sat;
         input [1:0]cdb_num_from_sat;
@@ -310,6 +319,7 @@ module main();
                         `CDB_RS(cdb_num_from_sat) == `RS_SRC(rs_num_to_sat, which);
     endfunction
 
+    // Is the RS ready to issue?
     function readyToIssue;
         input [5:0]rs_num_to_issue;
 
@@ -319,16 +329,21 @@ module main();
             !`RS_ISSUED(rs_num_to_issue);
     endfunction
 
+    // Update the RSs every cycle
     integer rs_update_counter, cdbn;
     always @(posedge clk) begin
         for (rs_update_counter = 0; rs_update_counter < `NUM_RS; rs_update_counter = rs_update_counter + 1) begin
+            // if the RS is busy...
             if (`RS_BUSY(rs_update_counter)) begin
-                // from CDB
+                // check the CDB
                 for(cdbn = 0; cdbn < `NUM_CDBS; cdbn = cdbn + 1) begin
+                    // if the RS# was broadcast, free it since the instruction
+                    // is done
                     if(`CDB_VALID(cdbn) && `CDB_RS(cdbn) == rs_update_counter) begin
                         `RS_BUSY(rs_update_counter) <= 0; // not busy
                         `RS_ISSUED(rs_update_counter) <= 0; // not issued
                     end
+                    // if one of the operands becomes ready
                     if(cdbSatisfiesRs(rs_update_counter, cdbn, 0)) begin
                         rs[rs_update_counter][45] <= 1;
                         rs[rs_update_counter][31:16] <= `CDB_DATA(cdbn);
@@ -339,13 +354,15 @@ module main();
                     end
                 end
             end else begin
-                // from dispatcher
+                // if the RS is not busy, listen to dispatcher to see
+                // if we need to add a new instruction
                 if(rs_update_counter == rs_num && rs_v) begin
                     rs[rs_update_counter] <= rs_val;
                 end
             end
         end
 
+        // submit the first ready RS to the correct FXU
         if (!fxu0_busy) begin
             if (readyToIssue(0)) begin
                 fxu0_rs_ready <= 1;
@@ -382,6 +399,7 @@ module main();
             fxu0_rs_ready <= 0;
         end
 
+        // submit the first ready RS to the correct LD unit
         if (!ld0_busy) begin
             if (readyToIssue(4)) begin
                 ld0_rs_ready <= 1;
@@ -419,26 +437,24 @@ module main();
         end
     end
 
-    // TODO: remove debugging code
-    wire [51:0]rs0 = rs[0];
-    wire [51:0]rs1 = rs[1];
-    wire [51:0]rs2 = rs[2];
-    wire [51:0]rs3 = rs[3];
-    wire rs0_ready = readyToIssue(0);
-
     // CDB
     // bits field in order
     // 1    valid
     // 6    rs#
     // 4    op
     // 16   data
+    //
+    // This is a big bus that can be listened in on. It is written by the FUs.
+    // Convenience macros at top of file.
     wire [26:0]cdb[1:0];
 
-    // TODO: remove debugging code
-    wire [26:0]cdb0 = cdb[0];
-    wire [26:0]cdb1 = cdb[1];
-
     // FUs
+    // There are 2 FUs
+    // 1) FXU
+    // 2) LD unit
+    //
+    // Each has 4 RSs and a lane in the CDB
+
     // FXU
     reg       fxu0_rs_ready = 0;
     reg  [5:0]fxu0_ready_rs_num;

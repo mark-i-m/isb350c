@@ -1,7 +1,7 @@
 VFILES=$(wildcard *.v)
 
 cpu : $(VFILES) Makefile
-	iverilog -o cpu $(VFILES)
+	iverilog -Wall -o cpu $(VFILES)
 
 run : cpu
 	timeout 3 ./cpu

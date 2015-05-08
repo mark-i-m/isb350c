@@ -35,7 +35,7 @@ Inputs: pc, addr
             if (psamc[B].counter == 0) {
                 psamc[B].sa = psamc[A].sa + 1
                 spamc[psamc[B].sa] = B
-                // Do not remove old mappings
+                // Do not remove old sp mappings
             }
 
     b) Neither in PSAMC
@@ -61,8 +61,13 @@ Inputs: pc, addr
         psamc[B].counter--
         if (psamc[B].counter == 0) {
             psamc[B].sa = psamc[A].sa + 1
-            // do not change SPAMC?
+            spamc[psamc[B].sa] = B
+            // Do not remove old sp mappings
         }
+
+4.5) Update last adr for pc in TU
+
+    tu[pc] = addr
 
 5) DONE
 

@@ -11,9 +11,26 @@
 // Steam predictor: 1 stream buffer with a queue of 4 entries, degree 1
 
 // Lots of macros:
-`define TU_V(tu_num)    tu[tu_num][32]
-`define TU_PC(tu_num)   tu[tu_num][31:16]
-`define TU_LAST(tu_num) tu[tu_num][15:0]
+
+`define TUENTRY_V(entry)    entry[32]
+`define TUENTRY_PC(entry)   entry[31:16]
+`define TUENTRY_LAST(entry) entry[15:0]
+
+`define PSENTRY_V(entry)    entry[50]
+`define PSENTRY_TAG(entry)  entry[49:34]
+`define PSENTRY_SA(entry)   entry[33:2]
+`define PSENTRY_CTR(entry)  entry[1:0]
+
+`define SPENTRY_V(entry)    entry[96]
+`define SPENTRY_TAG(entry)  entry[95:64]
+`define SPENTRY_PA0(entry)  entry[63:48]
+`define SPENTRY_PA1(entry)  entry[47:32]
+`define SPENTRY_PA2(entry)  entry[31:16]
+`define SPENTRY_PA3(entry)  entry[15:0]
+
+`define TU_V(tu_num)    `TUENTRY_V(tu[tu_num])
+`define TU_PC(tu_num)   `TUENTRY_PC(tu[tu_num])
+`define TU_LAST(tu_num) `TUENTRY_LAST(tu[tu_num])
 
 module isb(input clk,
     input v_in, input [15:0]pc, input [15:0]addr,
@@ -37,14 +54,13 @@ reg [31:0]next_sa = 0;
 reg [32:0]tu[3:0];
 
 // update TU
-reg tu_insert_idx = ; //TODO: undefined, use LRU *OR* current entry index if pc is already there
 reg tu_insert_v = 0;  //TODO: assign to these
 reg tu_insert_pc;
 reg tu_insert_last;
 
 always @(posedge clk) begin
     if(tu_insert_v) begin
-        tu[tu_insert_idx] <= {tu_insert_v, tu_insert_pc, tu_insert_last};
+        tu[tu_insert_idx(tu_insert_pc)] <= {tu_insert_v, tu_insert_pc, tu_insert_last};
     end
 end
 
@@ -53,8 +69,8 @@ reg pc_v;
 reg [15:0]pc_last;
 
 always @(pc) begin
-    pc_v <= `TUENTRY_V(tu_lookup(pc));
-    pc_last <= `TUENTRY_LAST(tu_lookup(pc));
+    pc_v <= tu_lookup_v(pc);
+    pc_last <= tu_lookup_last(pc);
 end
 
 
@@ -70,20 +86,29 @@ end
 // 32 entries
 reg [50:0]psamc[31:0];
 
-wire a = psamc_lookup(pc_last);
-wire b = psamc_lookup(addr);
-wire ab_comp = {`PSENTRY_V(a), `PSENTRY_V(b)}; // compare presence of a and b
+wire [50:0]a = psamc_lookup(pc_last);
+wire [50:0]b = psamc_lookup(addr);
+wire [1:0]ab_comp = {`PSENTRY_V(a), `PSENTRY_V(b)}; // compare presence of a and b
 
 // update psamc
-reg [4:0]ps_update_idx;//TODO: hook these up
-reg ps_update_v = 0;
-reg [15:0]ps_update_tag;
-reg [31:0]ps_update_sa;
-reg [1:0]ps_update_counter;
+reg ps_update_v0 = 0;//TODO: hook these up
+reg [15:0]ps_update_tag0;
+reg [31:0]ps_update_sa0;
+reg [1:0]ps_update_counter0;
+
+reg ps_update_v1 = 0;//TODO: hook these up
+reg [15:0]ps_update_tag1;
+reg [31:0]ps_update_sa1;
+reg [1:0]ps_update_counter1;
 
 always @(posedge clk) begin
-    if(ps_update_v) begin
-        psamc[ps_update_idx] <= {ps_update_v, ps_update_tag, ps_update_sa, ps_update_counter};
+    if(ps_update_v0) begin
+        psamc[ps_update_idx(ps_update_tag0)] <=
+            {1'h1, ps_update_tag0, ps_update_sa0, ps_update_counter0};
+    end
+    if(ps_update_v1) begin
+        psamc[ps_update_idx(ps_update_tag1)] <=
+            {1'h1, ps_update_tag1, ps_update_sa1, ps_update_counter1};
     end
 end
 
@@ -99,18 +124,24 @@ end
 reg [96:0]spamc[1:0];
 
 // udpate spamc
-reg [2:0]sp_update_idx;//TODO: hook these up
-reg sp_update_v = 0;
-reg [31:0]sp_update_tag;
-reg [15:0]sp_update_addr;
+// TODO: hook these up
+reg sp_update_v0 = 0;
+reg [31:0]sp_update_tag0;
+reg [15:0]sp_update_addr0;
+
+reg sp_update_v1 = 0;
+reg [31:0]sp_update_tag1;
+reg [15:0]sp_update_addr1;
+
+// TODO: MUST BE ABLE TO EDIT 2 ENTRIES AT ONCE!
+// OR TWO MAPPINGS IN THE SAME ENTRY!
 
 always @(posedge clk) begin
-    if(sp_update_v) begin
-        // TODO: update only one addr
-    end
+    // TODO: update stuff
 end
 
 ////////////////////////////// stream predictor //////////////////////////////
+//TODO: put stuff here...
 // fifo queue of 4 entries
 fifo #(2) sb0(/*TODO: ports*/);
 
@@ -123,25 +154,60 @@ always @(posedge clk) begin
             // Update mappings
             case(ab_comp)
                 0 : begin
-                    // TODO:neither a nor b in psamc
-                    // psamc[A].sa = next_sa
-                    // psamc[B].sa = psamc[A].sa + 1
+                    // neither A nor B in psamc
+
                     // next_sa += 16
+                    next_sa <= next_sa + 16;
+
+                    // psamc[A].sa = next_sa
+                    ps_update_v0 <= 1;
+                    ps_update_tag0 <= pc_last;
+                    ps_update_sa0 <= next_sa;
+                    ps_update_counter0 <= 3;
+
+                    // psamc[B].sa = psamc[A].sa + 1
+                    ps_update_v0 <= 1;
+                    ps_update_tag0 <= addr;
+                    ps_update_sa0 <= next_sa + 1;
+                    ps_update_counter0 <= 3;
 
                     // spamc[psamc[A].sa] = {A, B}
+                    sp_update_v0 <= 1;
+                    sp_update_tag0 <= next_sa;
+                    sp_update_addr0 <= pc_last;
+
+                    sp_update_v1 <= 1;
+                    sp_update_tag1 <= next_sa + 1;
+                    sp_update_addr1 <= addr;
                 end
                 1 : begin
-                    // TODO:only b in psamc
-                    // psamc[A].sa = next_sa
+                    // only b in psamc
+
                     // next_sa += 16
+                    next_sa <= next_sa + 16;
+
+                    // psamc[A].sa = next_sa
+                    ps_update_v0 <= 1;
+                    ps_update_tag0 <= pc_last;
+                    ps_update_sa0 <= next_sa;
+                    ps_update_counter0 <= 3;
 
                     // spamc[psamc[A].sa] = {A} // only A here
+                    sp_update_v0 <= 1;
+                    sp_update_tag0 <= next_sa;
+                    sp_update_addr0 <= pc_last;
 
                     // psamc[B].counter--
                     // if (psamc[B].counter == 0) {
                     //     psamc[B].sa = psamc[A].sa + 1
-                    //     // do not change SPAMC?
+                    //     spamc[psamc[B].sa] = B
+                    //     // Do not remove old sp mappings
                     // }
+                    if ((`PSENTRY_CTR(b) - 1) == 0) begin
+                        // TODO
+                    end else begin
+                        // TODO
+                    end
                 end
                 2 : begin
                     // TODO:only a in psamc
@@ -164,6 +230,10 @@ always @(posedge clk) begin
                     end
                 end
             endcase
+
+            // TODO: update TU
+            // tu[pc].last = addr
+
         end else if (!pc_v) begin
             // TODO:insert into TU
             // LRU?
@@ -192,14 +262,54 @@ function [32:0]tu_lookup;
         {1'h0, 31'hx};
 endfunction
 
+function tu_lookup_v;
+    input [15:0]pc;
+
+    reg [32:0]lookup;
+
+    begin
+        lookup = tu_lookup(pc);
+        tu_lookup_v = `TUENTRY_V(lookup);
+    end
+endfunction
+
+function [15:0]tu_lookup_last;
+    input [15:0]pc;
+
+    reg [32:0]lookup;
+
+    begin
+        lookup = tu_lookup(pc);
+        tu_lookup_last = `TUENTRY_LAST(lookup);
+    end
+endfunction
+
+
 function [50:0]psamc_lookup;
     input [15:0]pa;
 
-    // TODO
-endmodule
+    psamc_lookup = 0;// TODO
+endfunction
 
 function [48:0]spamc_lookup; // returns only the pa for the given sa
     input [31:0]sa;
 
-    // TODO
+    spamc_lookup = 0;// TODO
 endfunction
+
+
+function [1:0]tu_insert_idx;
+    input [15:0]pc;
+
+    tu_insert_idx = 0; // TODO
+endfunction
+
+function [4:0]ps_update_idx; // returns the psamc index to update for this tag
+    input [15:0]tag;
+
+    // must check if the data is already in psamc or not
+
+    ps_update_idx = 0; // TODO
+endfunction
+
+endmodule

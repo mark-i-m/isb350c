@@ -23,10 +23,7 @@
 
 `define SPENTRY_V(entry)    entry[96]
 `define SPENTRY_TAG(entry)  entry[95:64]
-`define SPENTRY_PA0(entry)  entry[63:48]
-`define SPENTRY_PA1(entry)  entry[47:32]
-`define SPENTRY_PA2(entry)  entry[31:16]
-`define SPENTRY_PA3(entry)  entry[15:0]
+`define SPENTRY_PA(entry, i)  entry[63 - (16*i):48 - (16*i)]
 
 `define TU_V(tu_num)    `TUENTRY_V(tu[tu_num])
 `define TU_PC(tu_num)   `TUENTRY_PC(tu[tu_num])
@@ -54,7 +51,7 @@ reg [31:0]next_sa = 0;
 reg [32:0]tu[3:0];
 
 // update TU
-reg tu_insert_v = 0;  //TODO: assign to these
+reg tu_insert_v = 0;
 reg tu_insert_pc;
 reg tu_insert_last;
 
@@ -238,7 +235,7 @@ always @(posedge clk) begin
                         ps_update_v1 <= 1;
                         ps_update_tag1 <= addr;
                         ps_update_sa1 <= `PSENTRY_SA(b);
-                        ps_update_counter1 <= (`PSENTRY_CTY(b) == 3) ? 3 : `PSENTRY_CTR(b) + 1;
+                        ps_update_counter1 <= (`PSENTRY_CTR(b) == 3) ? 3 : `PSENTRY_CTR(b) + 1;
                     end else begin
                         // psamc[B].counter--
                         // if (psamc[B].counter == 0) {

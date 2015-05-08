@@ -6,7 +6,7 @@
 // -----
 // Max steam length: 16 addrs
 // PS-AMC size: 32 entries mapping 1 addr each
-// SP-AMC size: 2 entries mapping 16 addrs each
+// SP-AMC size: 8 entries mapping 4 addrs each
 // Training unit: 4 entries
 // Steam predictor: 1 stream buffer with a queue of 4 entries, degree 1
 
@@ -74,18 +74,41 @@ wire a = psamc_lookup(pc_last);
 wire b = psamc_lookup(addr);
 wire ab_comp = {`PSENTRY_V(a), `PSENTRY_V(b)}; // compare presence of a and b
 
+// update psamc
+reg [4:0]ps_update_idx;//TODO: hook these up
+reg ps_update_v = 0;
+reg [15:0]ps_update_tag;
+reg [31:0]ps_update_sa;
+reg [1:0]ps_update_counter;
+
+always @(posedge clk) begin
+    if(ps_update_v) begin
+        psamc[ps_update_idx] <= {ps_update_v, ps_update_tag, ps_update_sa, ps_update_counter};
+    end
+end
 
 //////////////////////////////// SP-AMC ////////////////////////////////////////
 // bits | field
 // 1    | valid
 // 32   | tag (just use whole addr)
-// 256  | 16 physical addresses
+// 64   | 4 physical addresses
 // -----|----------------------
-// 289  | total
+// 97   | total
 //
-// 2 entries
-reg [288:0]spamc[1:0];
+// 8 entries
+reg [96:0]spamc[1:0];
 
+// udpate spamc
+reg [2:0]sp_update_idx;//TODO: hook these up
+reg sp_update_v = 0;
+reg [31:0]sp_update_tag;
+reg [15:0]sp_update_addr;
+
+always @(posedge clk) begin
+    if(sp_update_v) begin
+        // TODO: update only one addr
+    end
+end
 
 ////////////////////////////// stream predictor //////////////////////////////
 // fifo queue of 4 entries

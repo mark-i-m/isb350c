@@ -13,13 +13,24 @@ Inputs: pc, addr
     A = tu[pc].last
     B = addr
 
+3.5) If A = B; go to 6
+
+
+
+
+
 4) Lookup pair in PS-AMC and compare
+// TODO handle max length streams
     a) Both in PSAMC
         i) Consecutive
 
             psamc[B].counter++
 
         ii) Non-consecutive
+
+//TODO: what if A is already followed by something?
+    - Copy stream after A and assign B after A
+    - OR just reassign it <- simpler
 
             psamc[B].counter--
             if (psamc[B].counter == 0) {

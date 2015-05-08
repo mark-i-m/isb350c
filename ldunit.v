@@ -1,6 +1,6 @@
 `timescale 1ps/1ps
 
-// A LD unit 
+// A LD unit
 //
 // It can do the following operations:
 //
@@ -83,9 +83,13 @@ module ld(input clk,
     wire [15:0]l3d_evicted_data;
     wire l3d_evicted_valid;
     facache l3d(clk, raddr_in, state == `L2,
-        l2d_evicted_adr, l2d_evicted_data, l2d_evicted_valid,
+        l2d_evicted_adr, l2d_evicted_data, l2d_evicted_valid, // TODO: insert prefetches here
         l3d_data, l3d_hit,
         l3d_evicted_adr, l3d_evicted_data, l3d_evicted_valid);
+
+    // ISB prefetcher
+    // It trains on the L3 access stream and prefetches into the L3 cache
+    // TODO
 
     // update state
     always @(posedge clk) begin

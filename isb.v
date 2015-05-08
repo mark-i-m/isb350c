@@ -224,7 +224,7 @@ always @(posedge clk) begin
                     ps_update_v1 <= 1;
                     ps_update_tag1 <= addr;
                     ps_update_sa1 <= `PSENTRY_SA(a) + 1;
-                    ps_update_couter1 <= 3;
+                    ps_update_counter1 <= 3;
 
                     // spamc[psamc[A].sa] = {A, B}
                     sp_update_v1 <= 1;
@@ -232,32 +232,47 @@ always @(posedge clk) begin
                     sp_update_addr1 <= addr;
                 end
                 3 : begin
-                    // TODO:both in psamc
+                    // both in psamc
                     if (b == a + 1) begin
-                        // TODO:
                         // psamc[B].counter++
+                        ps_update_v1 <= 1;
+                        ps_update_tag1 <= addr;
+                        ps_update_sa1 <= `PSENTRY_SA(b);
+                        ps_update_counter1 <= (`PSENTRY_CTY(b) == 3) ? 3 : `PSENTRY_CTR(b) + 1;
                     end else begin
-                        // TODO:
                         // psamc[B].counter--
                         // if (psamc[B].counter == 0) {
                         //     psamc[B].sa = psamc[A].sa + 1
                         //     spamc[psamc[B].sa] = B
                         //     // Do not remove old mappings
                         // }
+                        if ((`PSENTRY_CTR(b) - 1) == 0) begin
+                            ps_update_v1 <= 1;
+                            ps_update_tag1 <= addr;
+                            ps_update_sa1 <= `PSENTRY_SA(a) + 1;
+                            ps_update_counter1 <= 3;
+
+                            sp_update_v1 <= 1;
+                            sp_update_tag1 <= `PSENTRY_SA(a) + 1;
+                            sp_update_addr1 <= addr;
+                        end else begin
+                            ps_update_v1 <= 1;
+                            ps_update_tag1 <= addr;
+                            ps_update_sa1 <= `PSENTRY_SA(b);
+                            ps_update_counter1 <= `PSENTRY_CTR(b) - 1;
+                        end
                     end
                 end
             endcase
-
-            // TODO: update TU
-            // tu[pc].last = addr
-
         end else if (!pc_v) begin
-            // TODO:insert into TU
-            // LRU?
-            // tu[pc].last = addr
+            // TODO: turn off appropriate insert/update flags
         end
 
-
+        // update TU
+        // tu[pc].last = addr
+        tu_insert_v <= 1;
+        tu_insert_pc <= pc;
+        tu_insert_last <= addr;
 
 
         // TODO: prediction
@@ -265,6 +280,8 @@ always @(posedge clk) begin
         //    prefetch = prefetch_trigger(b.sa);
         //    prefetch_addr = spamc(prefetch);
         //end
+    end else begin
+        // TODO: turn insert/update all flags off
     end
 end
 
@@ -317,7 +334,7 @@ endfunction
 
 function [1:0]tu_insert_idx;
     input [15:0]pc;
-
+    // LRU??
     tu_insert_idx = 0; // TODO
 endfunction
 

@@ -8,6 +8,9 @@ Inputs: pc, addr
     - If there go to 3
     - Else go to 2
 2) Insert pc/addr into TU; go to 6
+
+    tu[pc].last = addr
+
 3) Get correlated pair
 
     A = tu[pc].last
@@ -28,14 +31,11 @@ Inputs: pc, addr
 
         ii) Non-consecutive
 
-//TODO: what if A is already followed by something?
-    - Copy stream after A and assign B after A
-    - OR just reassign it <- simpler
-
             psamc[B].counter--
             if (psamc[B].counter == 0) {
                 psamc[B].sa = psamc[A].sa + 1
-                // do not change SPAMC?
+                spamc[psamc[B].sa] = B
+                // Do not remove old mappings
             }
 
     b) Neither in PSAMC
@@ -71,7 +71,7 @@ Prediction
 ==========
 1) Lookup addr in PSAMC
 
-    addr_sa = psamc[addr].sa
+    addr_sa = psamc[addr]
 
 2) If !addr_sa.v, go to 5
 3) <Steam buffer stuff>

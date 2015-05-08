@@ -1,0 +1,74 @@
+Pseudocode for the ISB
+
+Training unit
+=============
+Inputs: pc, addr
+
+1) Lookup pc in TU
+    - If there go to 3
+    - Else go to 2
+2) Insert pc/addr into TU; go to 6
+3) Get correlated pair
+
+    A = tu[pc].last
+    B = addr
+
+4) Lookup pair in PS-AMC and compare
+    a) Both in PSAMC
+        i) Consecutive
+
+            psamc[B].counter++
+
+        ii) Non-consecutive
+
+            psamc[B].counter--
+            if (psamc[B].counter == 0) {
+                psamc[B].sa = psamc[A].sa + 1
+                // do not change SPAMC?
+            }
+
+    b) Neither in PSAMC
+
+        psamc[A].sa = next_sa
+        psamc[B].sa = psamc[A].sa + 1
+        next_sa += 16
+
+        spamc[psamc[A].sa] = {A, B}
+
+    c) A in PSAMC, but not B
+
+        psamc[B].sa = psamc[A].sa + 1
+        spamc[psamc[A].sa] = {A, B}
+
+    d) B in PSAMC, but not A
+
+        psamc[A].sa = next_sa
+        next_sa += 16
+
+        spamc[psamc[A].sa] = {A} // only A here
+
+        psamc[B].counter--
+        if (psamc[B].counter == 0) {
+            psamc[B].sa = psamc[A].sa + 1
+            // do not change SPAMC?
+        }
+
+5) DONE
+
+
+Prediction
+==========
+1) Lookup addr in PSAMC
+
+    addr_sa = psamc[addr].sa
+
+2) If !addr_sa.v, go to 5
+3) <Steam buffer stuff>
+
+    pred_sa = predict(addr_sa)
+
+4) Convert back to PA
+
+    pred_pa = spamc[pred_sa].pa
+
+5) DONE

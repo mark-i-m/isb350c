@@ -91,12 +91,12 @@ wire [50:0]b = psamc_lookup(addr);
 wire [1:0]ab_comp = {`PSENTRY_V(a), `PSENTRY_V(b)}; // compare presence of a and b
 
 // update psamc
-reg ps_update_v0 = 0;//TODO: hook these up
+reg ps_update_v0 = 0;
 reg [15:0]ps_update_tag0;
 reg [31:0]ps_update_sa0;
 reg [1:0]ps_update_counter0;
 
-reg ps_update_v1 = 0;//TODO: hook these up
+reg ps_update_v1 = 0;
 reg [15:0]ps_update_tag1;
 reg [31:0]ps_update_sa1;
 reg [1:0]ps_update_counter1;
@@ -124,7 +124,6 @@ end
 reg [96:0]spamc[1:0];
 
 // udpate spamc
-// TODO: hook these up
 reg sp_update_v0 = 0;
 reg [31:0]sp_update_tag0;
 reg [15:0]sp_update_addr0;
@@ -133,11 +132,10 @@ reg sp_update_v1 = 0;
 reg [31:0]sp_update_tag1;
 reg [15:0]sp_update_addr1;
 
-// TODO: MUST BE ABLE TO EDIT 2 ENTRIES AT ONCE!
-// OR TWO MAPPINGS IN THE SAME ENTRY!
-
 always @(posedge clk) begin
-    // TODO: update stuff
+    // TODO: MUST BE ABLE TO EDIT 2 ENTRIES AT ONCE!
+    // OR TWO MAPPINGS IN THE SAME ENTRY!
+    // OR ONE MAPPING WITHOUT MESSING UP OTHERS WITH THE SAME TAG
 end
 
 ////////////////////////////// stream predictor //////////////////////////////
@@ -204,15 +202,34 @@ always @(posedge clk) begin
                     //     // Do not remove old sp mappings
                     // }
                     if ((`PSENTRY_CTR(b) - 1) == 0) begin
-                        // TODO
+                        ps_update_v1 <= 1;
+                        ps_update_tag1 <= addr;
+                        ps_update_sa1 <= `PSENTRY_SA(a) + 1;
+                        ps_update_counter1 <= 3;
+
+                        sp_update_v1 <= 1;
+                        sp_update_tag1 <= `PSENTRY_SA(a) + 1;
+                        sp_update_addr1 <= addr;
                     end else begin
-                        // TODO
+                        ps_update_v1 <= 1;
+                        ps_update_tag1 <= addr;
+                        ps_update_sa1 <= `PSENTRY_SA(b);
+                        ps_update_counter1 <= `PSENTRY_CTR(b) - 1;
                     end
                 end
                 2 : begin
-                    // TODO:only a in psamc
+                    // only a in psamc
+
                     // psamc[B].sa = psamc[A].sa + 1
+                    ps_update_v1 <= 1;
+                    ps_update_tag1 <= addr;
+                    ps_update_sa1 <= `PSENTRY_SA(a) + 1;
+                    ps_update_couter1 <= 3;
+
                     // spamc[psamc[A].sa] = {A, B}
+                    sp_update_v1 <= 1;
+                    sp_update_tag1 <= `PSENTRY_SA(a);
+                    sp_update_addr1 <= addr;
                 end
                 3 : begin
                     // TODO:both in psamc

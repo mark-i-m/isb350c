@@ -30,6 +30,12 @@
 `define TU_PC(tu_num)   `TUENTRY_PC(tu[tu_num])
 `define TU_LAST(tu_num) `TUENTRY_LAST(tu[tu_num])
 
+`define PS_LOOKUP(pa) ((`PSENTRY_V(psamc[pa[4:0]]) && `PSENTRY_TAG(psamc[pa[4:0]]) == pa) ? psamc[pa[4:0]] : {1'h0, 50'hx})
+
+`define TU_LOOKUP_IDX(ip) ((`TU_V(0) && `TU_PC(0) == ip) ? 0 : (`TU_V(1) && `TU_PC(1) == ip) ? 1 : (`TU_V(2) && `TU_PC(2) == ip) ? 2 : (`TU_V(3) && `TU_PC(3) == ip) ? 3 : 4)
+
+`define TU_LOOKUP(ip) ((`TU_V(0) && `TU_PC(0) == ip) ? tu[0] : (`TU_V(1) && `TU_PC(1) == ip) ? tu[1] : (`TU_V(2) && `TU_PC(2) == ip) ? tu[2] : (`TU_V(3) && `TU_PC(3) == ip) ? tu[3] : 0)
+
 module isb(input clk,
     input v_in, input [15:0]pc, input [15:0]addr,
     output prefetch_v, output [15:0]prefetch_addr //TODO: hook these up
@@ -56,40 +62,26 @@ reg [32:0]tu[3:0];
 
 initial begin
     tu[0] <= 0;
-    tu[1] <= 1;
-    tu[2] <= 2;
-    tu[3] <= 3;
+    tu[1] <= 0;
+    tu[2] <= 0;
+    tu[3] <= 0;
 end
+
+//TODO remove debug code
+wire tu0m =  (`TU_V(0) && `TU_PC(0) == pc);
+wire tu1m =  (`TU_V(1) && `TU_PC(1) == pc);
+wire tu2m =  (`TU_V(2) && `TU_PC(2) == pc);
+wire tu3m =  (`TU_V(3) && `TU_PC(3) == pc);
 
 // update TU
-reg [1:0]tu_used;
+wire [1:0]tu_used = pc_v ? `TU_LOOKUP_IDX(pc) : tu_lru;
 wire [1:0]tu_lru;
-lru lru0(clk, tu_insert_v, tu_used, tu_lru);
-
-always @(tu_insert_pc) begin
-    tu_used <= tu_insert_idx(tu_insert_pc);
-end
-
-reg tu_insert_v = 0;
-reg [15:0]tu_insert_pc;
-reg [15:0]tu_insert_last;
-
-always @(posedge clk) begin
-    if(tu_insert_v) begin
-        tu[tu_insert_idx(tu_insert_pc)] <= {tu_insert_v, tu_insert_pc, tu_insert_last};
-        if (DEBUG) $display("tu[%d]\tv: %d\tpc: %x\tlast: %x", tu_insert_idx(tu_insert_pc), tu_insert_v, tu_insert_pc, tu_insert_last);
-    end
-end
+lru lru0(clk, v_in, tu_used, tu_lru);
 
 // lookup pc in the TU
-reg pc_v;
-reg [15:0]pc_last;
-
-always @(pc) begin
-    pc_v <= tu_lookup_v(pc);
-    pc_last <= tu_lookup_last(pc);
-end
-
+wire [32:0]pc_tu_lookup = `TU_LOOKUP(pc);
+wire pc_v = v_in ? `TUENTRY_V(pc_tu_lookup) : 0;
+wire [15:0]pc_last = `TUENTRY_LAST(pc_tu_lookup);
 
 //////////////////////////////// PS-AMC ////////////////////////////////////////
 // bits | field
@@ -103,9 +95,17 @@ end
 // 32 entries
 reg [50:0]psamc[31:0];
 
-wire [50:0]a = psamc_lookup(pc_last);
-wire [50:0]b = psamc_lookup(addr);
-wire [1:0]ab_comp = {`PSENTRY_V(a), `PSENTRY_V(b)}; // compare presence of a and b
+integer psamc_init_i;
+initial begin
+    for (psamc_init_i = 0; psamc_init_i < 32; psamc_init_i = psamc_init_i + 1) begin
+        `PSENTRY_V(psamc[psamc_init_i]) <= 0;
+    end
+end
+
+wire [50:0]a = `PS_LOOKUP(pc_last);
+wire [50:0]b = `PS_LOOKUP(addr);
+
+wire [1:0]ab_comp = {pc_v ? `PSENTRY_V(a) : 0, `PSENTRY_V(b)}; // compare presence of a and b
 
 // update psamc
 // - to simplify my design due to time constraints, only support 32 structural
@@ -124,12 +124,12 @@ always @(posedge clk) begin
     if(ps_update_v0 && ps_update_sa0 < 32) begin
         psamc[ps_update_idx(ps_update_tag0)] <=
             {1'h1, ps_update_tag0, ps_update_sa0, ps_update_counter0};
-        if (DEBUG) $display("PSAMC[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(ps_update_tag0), ps_update_v0, ps_update_sa0, ps_update_counter0);
+        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(ps_update_tag0), ps_update_v0, ps_update_tag0, ps_update_sa0, ps_update_counter0);
     end
     if(ps_update_v1 && ps_update_sa1 < 32) begin
         psamc[ps_update_idx(ps_update_tag1)] <=
             {1'h1, ps_update_tag1, ps_update_sa1, ps_update_counter1};
-        if (DEBUG) $display("PSAMC[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(ps_update_tag1), ps_update_v1, ps_update_sa1, ps_update_counter1);
+        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(ps_update_tag1), ps_update_v1, ps_update_tag1, ps_update_sa1, ps_update_counter1);
     end
 end
 
@@ -163,21 +163,21 @@ always @(posedge clk) begin
             `SPENTRY_PA(spamc[sp_update_idx(sp_update_tag0)], sp_update_tag0[1:0]) <= sp_update_addr0;
             `SPENTRY_PA(spamc[sp_update_idx(sp_update_tag1)], sp_update_tag1[1:0]) <= sp_update_addr1;
 
-            if (DEBUG) $display("SPAMC[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(sp_update_tag0), sp_update_v0, sp_update_addr0);
-            if (DEBUG) $display("SPAMC[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(sp_update_tag1), sp_update_v1, sp_update_addr1);
+            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(sp_update_tag0), sp_update_v0, sp_update_tag0, sp_update_addr0);
+            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(sp_update_tag1), sp_update_v1, sp_update_tag1, sp_update_addr1);
     end else begin
         // Normal case
         if (sp_update_v0 && sp_update_tag0 < 32) begin
             `SPENTRY_V(spamc[sp_update_idx(sp_update_tag0)]) <= 1'h1;
             `SPENTRY_TAG(spamc[sp_update_idx(sp_update_tag0)]) <= sp_update_tag0;
             `SPENTRY_PA(spamc[sp_update_idx(sp_update_tag0)], sp_update_tag0[1:0]) <= sp_update_addr0;
-            if (DEBUG) $display("SPAMC[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(sp_update_tag0), sp_update_v0, sp_update_addr0);
+            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(sp_update_tag0), sp_update_v0, sp_update_tag0, sp_update_addr0);
         end
         if (sp_update_v1 && sp_update_tag1 < 32) begin
             `SPENTRY_V(spamc[sp_update_idx(sp_update_tag1)]) <= 1'h1;
             `SPENTRY_TAG(spamc[sp_update_idx(sp_update_tag1)]) <= sp_update_tag1;
             `SPENTRY_PA(spamc[sp_update_idx(sp_update_tag1)], sp_update_tag1[1:0]) <= sp_update_addr1;
-            if (DEBUG) $display("SPAMC[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(sp_update_tag1), sp_update_v1, sp_update_addr1);
+            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(sp_update_tag1), sp_update_v1, sp_update_tag1, sp_update_addr1);
         end
     end
 end
@@ -208,10 +208,10 @@ always @(posedge clk) begin
                     ps_update_counter0 <= 3;
 
                     // psamc[B].sa = psamc[A].sa + 1
-                    ps_update_v0 <= 1;
-                    ps_update_tag0 <= addr;
-                    ps_update_sa0 <= next_sa + 1;
-                    ps_update_counter0 <= 3;
+                    ps_update_v1 <= 1;
+                    ps_update_tag1 <= addr;
+                    ps_update_sa1 <= next_sa + 1;
+                    ps_update_counter1 <= 3;
 
                     // spamc[psamc[A].sa] = {A, B}
                     sp_update_v0 <= 1;
@@ -248,11 +248,11 @@ always @(posedge clk) begin
                     if ((`PSENTRY_CTR(b) - 1) == 0) begin
                         ps_update_v1 <= 1;
                         ps_update_tag1 <= addr;
-                        ps_update_sa1 <= `PSENTRY_SA(a) + 1;
+                        ps_update_sa1 <= next_sa + 1;
                         ps_update_counter1 <= 3;
 
                         sp_update_v1 <= 1;
-                        sp_update_tag1 <= `PSENTRY_SA(a) + 1;
+                        sp_update_tag1 <= next_sa + 1;
                         sp_update_addr1 <= addr;
                     end else begin
                         ps_update_v1 <= 1;
@@ -272,7 +272,7 @@ always @(posedge clk) begin
 
                     // spamc[psamc[A].sa] = {A, B}
                     sp_update_v1 <= 1;
-                    sp_update_tag1 <= `PSENTRY_SA(a);
+                    sp_update_tag1 <= `PSENTRY_SA(a) + 1;
                     sp_update_addr1 <= addr;
                 end
                 3 : begin
@@ -319,10 +319,9 @@ always @(posedge clk) begin
 
         // update TU
         // tu[pc].last = addr
-        tu_insert_v <= 1;
-        tu_insert_pc <= pc;
-        tu_insert_last <= addr;
 
+        tu[tu_insert_idx(pc)] <= {1'h1, pc, addr};
+        if (DEBUG) $display("tu[%d]\tv: %d\tpc: %x\tlast: %x", tu_insert_idx(pc), 1'h1, pc, addr);
 
         // TODO: prediction
         //if (b.valid) begin
@@ -336,8 +335,6 @@ always @(posedge clk) begin
 
         sp_update_v0 <= 0;
         sp_update_v1 <= 0;
-
-        tu_insert_v <= 0;
     end
 end
 
@@ -354,9 +351,14 @@ function [2:0]tu_lookup_idx;
 endfunction
 
 // TODO remove debugging code
-wire v0 = `TU_V(3);
-wire [15:0]pc0 = `TU_PC(3);
-wire [15:0]last0 = `TU_LAST(3);
+wire tuv0 = `TU_V(3);
+wire [15:0]tupc0 = `TU_PC(3);
+wire [15:0]tulast0 = `TU_LAST(3);
+
+wire psv10 = `PSENTRY_V(psamc[16]);
+wire [15:0]pstag10 = `PSENTRY_TAG(psamc[16]);
+wire [31:0]pssa10 = `PSENTRY_SA(psamc[16]);
+wire [1:0]psctr10 = `PSENTRY_CTR(psamc[16]);
 
 function [32:0]tu_lookup;
     input [15:0]pc;
@@ -387,19 +389,6 @@ function [15:0]tu_lookup_last;
     begin
         lookup = tu_lookup(pc);
         tu_lookup_last = `TUENTRY_LAST(lookup);
-    end
-endfunction
-
-
-// lookup pa in psamc
-function [50:0]psamc_lookup;
-    input [15:0]pa;
-
-    reg [50:0]lookup;
-
-    begin
-        lookup = psamc[pa[4:0]];
-        psamc_lookup = (`PSENTRY_V(lookup) && `PSENTRY_TAG(lookup) == pa) ? lookup : {1'h0, 50'hx};
     end
 endfunction
 

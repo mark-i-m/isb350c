@@ -1,6 +1,7 @@
 `timescale 1ps/1ps
 
-// A toy implementation of the ISB (Jain and Lin, MICRO14).
+// A toy implementation of the ISB (Jain and Lin, MICRO13).
+// See REPORT.txt
 
 // Specs
 // -----
@@ -365,10 +366,15 @@ endfunction
 
 
 // lookup sa in spamc
-function [48:0]spamc_lookup; // returns only the pa for the given sa
+function [48:0]spamc_lookup;
     input [31:0]sa;
 
-    spamc_lookup = 0;// TODO
+    reg [96:0]lookup;
+
+    begin
+        lookup = spamc[sa[4:2]];
+        spamc_lookup = `SPENTRY_PA(lookup, sa && 2'h3);
+    end
 endfunction
 
 
@@ -398,7 +404,7 @@ endfunction
 function [2:0]sp_update_idx;
     input [32:0]sa;
 
-    sp_update_idx = sa[2:0];
+    sp_update_idx = sa[4:2];
 endfunction
 
 endmodule

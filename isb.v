@@ -24,7 +24,7 @@
 
 `define SPENTRY_V(entry)    entry[96]
 `define SPENTRY_TAG(entry)  entry[95:64]
-`define SPENTRY_PA(entry, i)  entry[63 - (16*i):48 - (16*i)]
+`define SPENTRY_PA(entry, i)  entry[63 - (16*i) -: 16]
 
 `define TU_V(tu_num)    `TUENTRY_V(tu[tu_num])
 `define TU_PC(tu_num)   `TUENTRY_PC(tu[tu_num])
@@ -143,9 +143,25 @@ reg [31:0]sp_update_tag1;
 reg [15:0]sp_update_addr1;
 
 always @(posedge clk) begin
-    // TODO: MUST BE ABLE TO EDIT 2 ENTRIES AT ONCE!
-    // OR TWO MAPPINGS IN THE SAME ENTRY!
-    // OR ONE MAPPING WITHOUT MESSING UP OTHERS WITH THE SAME TAG
+    if (sp_update_v0 && sp_update_v1 && sp_update_idx(sp_update_tag0) == sp_update_idx(sp_update_tag1) && sp_update_tag0 < 32 && sp_update_tag1 < 32) begin
+            `SPENTRY_V(spamc[sp_update_idx(sp_update_tag0)]) <= 1'h1;
+            `SPENTRY_TAG(spamc[sp_update_idx(sp_update_tag0)]) <= sp_update_tag0;
+
+            `SPENTRY_PA(spamc[sp_update_idx(sp_update_tag0)], sp_update_tag0[1:0]) <= sp_update_addr0;
+            `SPENTRY_PA(spamc[sp_update_idx(sp_update_tag1)], sp_update_tag1[1:0]) <= sp_update_addr1;
+    end else begin
+        // Normal case
+        if (sp_update_v0 && sp_update_tag0 < 32) begin
+            `SPENTRY_V(spamc[sp_update_idx(sp_update_tag0)]) <= 1'h1;
+            `SPENTRY_TAG(spamc[sp_update_idx(sp_update_tag0)]) <= sp_update_tag0;
+            `SPENTRY_PA(spamc[sp_update_idx(sp_update_tag0)], sp_update_tag0[1:0]) <= sp_update_addr0;
+        end
+        if (sp_update_v1 && sp_update_tag1 < 32) begin
+            `SPENTRY_V(spamc[sp_update_idx(sp_update_tag1)]) <= 1'h1;
+            `SPENTRY_TAG(spamc[sp_update_idx(sp_update_tag1)]) <= sp_update_tag1;
+            `SPENTRY_PA(spamc[sp_update_idx(sp_update_tag1)], sp_update_tag1[1:0]) <= sp_update_addr1;
+        end
+    end
 end
 
 ////////////////////////////// stream predictor //////////////////////////////

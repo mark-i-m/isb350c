@@ -1,6 +1,8 @@
 Describe your implementation:
 
 **One thing I could not do: TLB evictions
+-> result: cannot since AMCs -> run out of space
+-> design choice: for simplicity, stop training when we run out of space; only support 32 structural addresses
 
 What worked?
 

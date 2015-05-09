@@ -88,6 +88,8 @@ wire [50:0]b = psamc_lookup(addr);
 wire [1:0]ab_comp = {`PSENTRY_V(a), `PSENTRY_V(b)}; // compare presence of a and b
 
 // update psamc
+// - to simplify my design due to time constraints, only support 32 structural
+// addresses. Normally, TLB syncing would mitigate this problem
 reg ps_update_v0 = 0;
 reg [15:0]ps_update_tag0;
 reg [31:0]ps_update_sa0;
@@ -99,11 +101,11 @@ reg [31:0]ps_update_sa1;
 reg [1:0]ps_update_counter1;
 
 always @(posedge clk) begin
-    if(ps_update_v0) begin
+    if(ps_update_v0 && ps_update_sa0 < 32) begin
         psamc[ps_update_idx(ps_update_tag0)] <=
             {1'h1, ps_update_tag0, ps_update_sa0, ps_update_counter0};
     end
-    if(ps_update_v1) begin
+    if(ps_update_v1 && ps_update_sa1 < 32) begin
         psamc[ps_update_idx(ps_update_tag1)] <=
             {1'h1, ps_update_tag1, ps_update_sa1, ps_update_counter1};
     end
@@ -121,6 +123,8 @@ end
 reg [96:0]spamc[1:0];
 
 // udpate spamc
+// - to simplify my design due to time constraints, only support 32 structural
+// addresses. Normally, TLB syncing would mitigate this problem
 reg sp_update_v0 = 0;
 reg [31:0]sp_update_tag0;
 reg [15:0]sp_update_addr0;
@@ -262,7 +266,12 @@ always @(posedge clk) begin
                 end
             endcase
         end else if (!pc_v) begin
-            // TODO: turn off appropriate insert/update flags
+            // turn off appropriate insert/update flags
+            ps_update_v0 <= 0;
+            ps_update_v1 <= 0;
+
+            sp_update_v0 <= 0;
+            sp_update_v1 <= 0;
         end
 
         // update TU
@@ -278,11 +287,19 @@ always @(posedge clk) begin
         //    prefetch_addr = spamc(prefetch);
         //end
     end else begin
-        // TODO: turn insert/update all flags off
+        // turn insert/update all flags off
+        ps_update_v0 <= 0;
+        ps_update_v1 <= 0;
+
+        sp_update_v0 <= 0;
+        sp_update_v1 <= 0;
+
+        tu_insert_v <= 0;
     end
 end
 
 /////////////////////////// usefull functions ///////////////////////////////
+// lookup pc in tu
 function [32:0]tu_lookup;
     input [15:0]pc;
 
@@ -293,6 +310,7 @@ function [32:0]tu_lookup;
         {1'h0, 31'hx};
 endfunction
 
+// because verilog:
 function tu_lookup_v;
     input [15:0]pc;
 
@@ -316,12 +334,20 @@ function [15:0]tu_lookup_last;
 endfunction
 
 
+// lookup pa in psamc
 function [50:0]psamc_lookup;
     input [15:0]pa;
 
-    psamc_lookup = 0;// TODO
+    reg [50:0]lookup;
+
+    begin
+        lookup = psamc[pa[4:0]];
+        psamc_lookup = (`PSENTRY_V(lookup) && `PSENTRY_TAG(lookup) == pa) ? lookup : {1'h0, 50'hx};
+    end
 endfunction
 
+
+// lookup sa in spamc
 function [48:0]spamc_lookup; // returns only the pa for the given sa
     input [31:0]sa;
 
@@ -329,18 +355,28 @@ function [48:0]spamc_lookup; // returns only the pa for the given sa
 endfunction
 
 
+// returns the tu index to update for this pc
 function [1:0]tu_insert_idx;
     input [15:0]pc;
     // LRU??
+    // check if it is already in the cache
     tu_insert_idx = 0; // TODO
 endfunction
 
-function [4:0]ps_update_idx; // returns the psamc index to update for this tag
-    input [15:0]tag;
 
-    // must check if the data is already in psamc or not
+// returns the psamc index to update for this pa
+function [4:0]ps_update_idx;
+    input [15:0]pa;
 
-    ps_update_idx = 0; // TODO
+    ps_update_idx = pa[4:0];
+endfunction
+
+
+// returns the spamc index to update for this sa
+function [2:0]sp_update_idx;
+    input [32:0]sa;
+
+    sp_update_idx = sa[2:0];
 endfunction
 
 endmodule

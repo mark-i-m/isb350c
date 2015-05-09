@@ -1,5 +1,5 @@
 `timescale 1ps/1ps
-module counter(input isHalt, input clk, input W_v, output cycle);
+module counter(input isHalt, input clk, input W_v, output [15:0]cycle);
 
     reg [15:0] count = 0;
     reg real insCount = 0;

@@ -51,6 +51,14 @@ reg [31:0]next_sa = 0;
 reg [32:0]tu[3:0];
 
 // update TU
+reg [1:0]tu_used;
+wire [1:0]tu_lru;
+lru lru0(clk, tu_insert_v, tu_used, tu_lru);
+
+always @(tu_insert_pc) begin
+    tu_used <= tu_insert_idx(tu_insert_pc);
+end
+
 reg tu_insert_v = 0;
 reg tu_insert_pc;
 reg tu_insert_last;
@@ -300,14 +308,23 @@ end
 
 /////////////////////////// usefull functions ///////////////////////////////
 // lookup pc in tu
+function [2:0]tu_lookup_idx;
+    input [15:0]pc;
+
+    tu_lookup_idx = (`TU_PC(0) == pc && `TU_V(0)) ? 0 :
+        (`TU_PC(1) == pc && `TU_V(1)) ? 1 :
+        (`TU_PC(2) == pc && `TU_V(2)) ? 2 :
+        (`TU_PC(3) == pc && `TU_V(3)) ? 3 :
+        4;
+endfunction
+
 function [32:0]tu_lookup;
     input [15:0]pc;
 
-    tu_lookup = (`TU_PC(0) == pc && `TU_V(0)) ? tu[0] :
-        (`TU_PC(1) == pc && `TU_V(1)) ? tu[1] :
-        (`TU_PC(2) == pc && `TU_V(2)) ? tu[2] :
-        (`TU_PC(3) == pc && `TU_V(3)) ? tu[3] :
-        {1'h0, 31'hx};
+    case(tu_lookup_idx(pc))
+        0,1,2,3 : tu_lookup = tu[tu_lookup_idx(pc)];
+        4 : tu_lookup = {1'h0, 31'hx};
+    endcase
 endfunction
 
 // because verilog:
@@ -356,11 +373,16 @@ endfunction
 
 
 // returns the tu index to update for this pc
+// check if it is already in the tu
 function [1:0]tu_insert_idx;
     input [15:0]pc;
-    // LRU??
-    // check if it is already in the cache
-    tu_insert_idx = 0; // TODO
+
+    reg lookup;
+
+    begin
+        lookup = tu_lookup_v(pc);
+        tu_insert_idx = lookup ? tu_lookup_idx(pc) : tu_lru;
+    end
 endfunction
 
 

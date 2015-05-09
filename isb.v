@@ -34,7 +34,7 @@
 
 `define TU_LOOKUP_IDX(ip) ((`TU_V(0) && `TU_PC(0) == ip) ? 0 : (`TU_V(1) && `TU_PC(1) == ip) ? 1 : (`TU_V(2) && `TU_PC(2) == ip) ? 2 : (`TU_V(3) && `TU_PC(3) == ip) ? 3 : 4)
 
-`define TU_LOOKUP(ip) ((`TU_V(0) && `TU_PC(0) == ip) ? tu[0] : (`TU_V(1) && `TU_PC(1) == ip) ? tu[1] : (`TU_V(2) && `TU_PC(2) == ip) ? tu[2] : (`TU_V(3) && `TU_PC(3) == ip) ? tu[3] : 0)
+`define TU_LOOKUP(ip) ((`TU_V(0) && `TU_PC(0) == ip) ? tu[0] : (`TU_V(1) && `TU_PC(1) == ip) ? tu[1] : (`TU_V(2) && `TU_PC(2) == ip) ? tu[2] : (`TU_V(3) && `TU_PC(3) == ip) ? tu[3] : 33'h0)
 
 module isb(input clk,
     input v_in, input [15:0]pc, input [15:0]addr,
@@ -123,6 +123,9 @@ fifo #(2) sb0(/*TODO: ports*/);
 //////////////////////////////// on tick ////////////////////////////////////
 always @(posedge clk) begin
     if (v_in) begin
+
+        if (DEBUG) $display("pc: %x, addr: %x", pc, addr);
+
         // training
         if (pc_v && pc_last != addr) begin
             // Update mappings
@@ -131,40 +134,40 @@ always @(posedge clk) begin
                     // neither A nor B in psamc
 
                     // next_sa += 16
-                    next_sa <= next_sa + 16;
+                    next_sa <= next_sa + 32'h16;
 
                     // psamc[A].sa = next_sa
                     // psamc[B].sa = psamc[A].sa + 1
                     if (next_sa < 32) begin
                         psamc[ps_update_idx(pc_last)] <= {1'h1, pc_last, next_sa, 2'h3};
-                        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(pc_last), 1, pc_last, next_sa, 3);
+                        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(pc_last), 1'h1, pc_last, next_sa, 2'h3);
 
                         psamc[ps_update_idx(addr)] <= {1'h1, addr, next_sa + 32'h1, 2'h3};
-                        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1, addr, next_sa + 1, 3);
+                        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1'h1, addr, next_sa + 32'h1, 2'h3);
                     end
 
                     // spamc[psamc[A].sa] = {A, B}
-                    if (sp_update_idx(next_sa) == sp_update_idx(next_sa + 1) && next_sa < 32) begin
+                    if (sp_update_idx(next_sa) == sp_update_idx(next_sa + 32'h1) && next_sa < 32) begin
                             `SPENTRY_V(spamc[sp_update_idx(next_sa)]) <= 1'h1;
                             `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
 
                             `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
-                            `SPENTRY_PA(spamc[sp_update_idx(next_sa + 1)], next_sa[1:0] + 1) <= addr;
+                            `SPENTRY_PA(spamc[sp_update_idx(next_sa + 32'h1)], next_sa[1:0] + 2'h1) <= addr;
 
-                            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1, next_sa, pc_last);
-                            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa + 1), 1, next_sa + 1, addr);
+                            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
+                            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa + 32'h1), 1'h1, next_sa + 32'h1, addr);
                     end else begin
                         // Normal case
                         if (next_sa < 32) begin
                             `SPENTRY_V(spamc[sp_update_idx(next_sa)]) <= 1'h1;
                             `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
                             `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
-                            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1, next_sa, pc_last);
+                            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
 
                             `SPENTRY_V(spamc[sp_update_idx(next_sa + 1)]) <= 1'h1;
-                            `SPENTRY_TAG(spamc[sp_update_idx(next_sa + 1)]) <= next_sa + 1;
-                            `SPENTRY_PA(spamc[sp_update_idx(next_sa + 1)], next_sa[1:0] + 1) <= addr;
-                            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa + 1), 1, next_sa + 1, addr);
+                            `SPENTRY_TAG(spamc[sp_update_idx(next_sa + 1)]) <= next_sa + 32'h1;
+                            `SPENTRY_PA(spamc[sp_update_idx(next_sa + 1)], next_sa[1:0] + 2'h1) <= addr;
+                            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa + 32'h1), 1'h1, next_sa + 32'h1, addr);
                         end
                     end
                 end
@@ -172,12 +175,12 @@ always @(posedge clk) begin
                     // only b in psamc
 
                     // next_sa += 16
-                    next_sa <= next_sa + 16;
+                    next_sa <= next_sa + 32'h16;
 
                     // psamc[A].sa = next_sa
                     if (next_sa < 32) begin
                         psamc[ps_update_idx(pc_last)] <= {1'h1, pc_last, next_sa, 2'h3};
-                        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(pc_last), 1, pc_last, next_sa, 3);
+                        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(pc_last), 1'h1, pc_last, next_sa, 2'h3);
                     end
 
                     // spamc[psamc[A].sa] = {A} // below
@@ -188,47 +191,47 @@ always @(posedge clk) begin
                     //     spamc[psamc[B].sa] = B
                     //     // Do not remove old sp mappings
                     // }
-                    if ((`PSENTRY_CTR(b) - 1) == 0) begin
+                    if ((`PSENTRY_CTR(b) - 2'h1) == 0) begin
                         if (next_sa < 32) begin
                             psamc[ps_update_idx(addr)] <= {1'h1, addr, next_sa + 32'h1, 2'h3};
-                            if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1, addr, next_sa + 1, 3);
+                            if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1'h1, addr, next_sa + 32'h1, 2'h3);
                         end
 
                         // update spamc[A,B]
-                        if (sp_update_idx(next_sa) == sp_update_idx(next_sa + 1) && next_sa < 32) begin
+                        if (sp_update_idx(next_sa) == sp_update_idx(next_sa + 32'h1) && next_sa < 32) begin
                                 `SPENTRY_V(spamc[sp_update_idx(next_sa)]) <= 1'h1;
                                 `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
 
                                 `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
-                                `SPENTRY_PA(spamc[sp_update_idx(next_sa + 1)], next_sa[1:0] + 1) <= addr;
+                                `SPENTRY_PA(spamc[sp_update_idx(next_sa + 32'h1)], next_sa[1:0] + 2'h1) <= addr;
 
-                                if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1, next_sa, pc_last);
-                                if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa + 1), 1, next_sa + 1, addr);
+                                if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
+                                if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa + 32'h1), 1'h1, next_sa + 32'h1, addr);
                         end else begin
                             // Normal case
                             if (next_sa < 32) begin
                                 `SPENTRY_V(spamc[sp_update_idx(next_sa)]) <= 1'h1;
                                 `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
                                 `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
-                                if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1, next_sa, pc_last);
+                                if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
                             end
                             if (next_sa + 1 < 32) begin
-                                `SPENTRY_V(spamc[sp_update_idx(next_sa + 1)]) <= 1'h1;
-                                `SPENTRY_TAG(spamc[sp_update_idx(next_sa + 1)]) <= next_sa + 1;
-                                `SPENTRY_PA(spamc[sp_update_idx(next_sa + 1)], next_sa[1:0] + 1) <= addr;
-                                if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa + 1), 1, next_sa + 1, addr);
+                                `SPENTRY_V(spamc[sp_update_idx(next_sa + 32'h1)]) <= 1'h1;
+                                `SPENTRY_TAG(spamc[sp_update_idx(next_sa + 32'h1)]) <= next_sa + 32'h1;
+                                `SPENTRY_PA(spamc[sp_update_idx(next_sa + 32'h1)], next_sa[1:0] + 2'h1) <= addr;
+                                if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa + 32'h1), 1'h1, next_sa + 32'h1, addr);
                             end
                         end
                     end else begin
                         psamc[ps_update_idx(addr)] <= {1'h1, addr, `PSENTRY_SA(b), `PSENTRY_CTR(b) - 2'h1};
-                        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1, addr, `PSENTRY_SA(b), `PSENTRY_CTR(b) - 1);
+                        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1'h1, addr, `PSENTRY_SA(b), `PSENTRY_CTR(b) - 2'h1);
 
                         // update spamc[A] only
                         if (next_sa < 32) begin
                             `SPENTRY_V(spamc[sp_update_idx(next_sa)]) <= 1'h1;
                             `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
                             `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
-                            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1, next_sa, pc_last);
+                            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
                         end
                     end
                 end
@@ -236,51 +239,51 @@ always @(posedge clk) begin
                     // only a in psamc
 
                     // psamc[B].sa = psamc[A].sa + 1
-                    if(`PSENTRY_SA(a) + 1 < 32) begin
+                    if(`PSENTRY_SA(a) + 32'h1 < 32) begin
                         psamc[ps_update_idx(addr)] <= {1'h1, addr, `PSENTRY_SA(a) + 32'h1, 2'h3};
-                        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1, addr, `PSENTRY_SA(a) + 1, 3);
+                        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1'h1, addr, `PSENTRY_SA(a) + 32'h1, 2'h3);
                     end
 
                     // spamc[psamc[A].sa] = {A, B}
-                    if (`PSENTRY_SA(a) + 1 < 32) begin
-                        `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 1)]) <= 1'h1;
-                        `SPENTRY_TAG(spamc[sp_update_idx(`PSENTRY_SA(a) + 1)]) <= `PSENTRY_SA(a) + 1;
-                        `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 1)], `PSENTRY_SA(a)[1:0] + 1) <= addr;
-                        if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 1), 1, `PSENTRY_SA(a) + 1, addr);
+                    if (`PSENTRY_SA(a) + 32'h1 < 32) begin
+                        `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= 1'h1;
+                        `SPENTRY_TAG(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= `PSENTRY_SA(a) + 32'h1;
+                        `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], `PSENTRY_SA(a)[1:0] + 32'h1) <= addr;
+                        if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
                     end
 
                 end
                 3 : begin
                     // both in psamc
-                    if (b == a + 1) begin
+                    if (`PSENTRY_SA(b) == `PSENTRY_SA(a) + 32'h1) begin
+                        // if consecutive
                         // psamc[B].counter++
-                        if(`PSENTRY_SA(b) < 32) begin
-                            psamc[ps_update_idx(addr)] <= {1'h1, addr, `PSENTRY_SA(b), (`PSENTRY_CTR(b) == 3) ? 3 : `PSENTRY_CTR(b) + 1};
-                            if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1, addr, `PSENTRY_SA(b), (`PSENTRY_CTR(b) == 3) ? 3 : `PSENTRY_CTR(b) + 1);
-                        end
+                        psamc[ps_update_idx(addr)] <= {1'h1, addr, `PSENTRY_SA(b), ((`PSENTRY_CTR(b) == 2'h3) ? 2'h3 : `PSENTRY_CTR(b) + 2'h1)};
+                        if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1'h1, addr, `PSENTRY_SA(b), (`PSENTRY_CTR(b) == 2'h3) ? 2'h3 : `PSENTRY_CTR(b) + 2'h1);
                     end else begin
+                        // if not consecutive
                         // psamc[B].counter--
                         // if (psamc[B].counter == 0) {
                         //     psamc[B].sa = psamc[A].sa + 1
                         //     spamc[psamc[B].sa] = B
                         //     // Do not remove old mappings
                         // }
-                        if ((`PSENTRY_CTR(b) - 1) == 0) begin
-                            if(`PSENTRY_SA(a) + 1 < 32) begin
+                        if ((`PSENTRY_CTR(b) - 2'h1) == 0) begin
+                            if(`PSENTRY_SA(a) + 32'h1 < 32) begin
                                 psamc[ps_update_idx(addr)] <= {1'h1, addr, `PSENTRY_SA(a) + 32'h1, 2'h3};
-                                if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1, addr, `PSENTRY_SA(a) + 1, 3);
+                                if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1'h1, addr, `PSENTRY_SA(a) + 32'h1, 2'h3);
                             end
 
-                            if (`PSENTRY_SA(a) + 1 < 32) begin
-                                `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 1)]) <= 1'h1;
-                                `SPENTRY_TAG(spamc[sp_update_idx(`PSENTRY_SA(a) + 1)]) <= `PSENTRY_SA(a) + 1;
-                                `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 1)], `PSENTRY_SA(a)[1:0] + 1) <= addr;
-                                if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 1), 1, `PSENTRY_SA(a) + 1, addr);
+                            if (`PSENTRY_SA(a) + 32'h1 < 32) begin
+                                `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= 1'h1;
+                                `SPENTRY_TAG(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= `PSENTRY_SA(a) + 32'h1;
+                                `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], `PSENTRY_SA(a)[1:0] + 2'h1) <= addr;
+                                if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
                             end
                         end else begin
                             if(`PSENTRY_SA(b) < 32) begin
                                 psamc[ps_update_idx(addr)] <= {1'h1, addr, `PSENTRY_SA(b), `PSENTRY_CTR(b) - 2'h1};
-                                if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1, addr, `PSENTRY_SA(b), `PSENTRY_CTR(b) - 1);
+                                if (DEBUG) $display("ps[%d]\tv: %d\ttag: %x\tsa: %x\tctr: %d", ps_update_idx(addr), 1'h1, addr, `PSENTRY_SA(b), `PSENTRY_CTR(b) - 2'h1);
                             end
                         end
                     end
@@ -292,6 +295,8 @@ always @(posedge clk) begin
         // tu[pc].last = addr
         tu[tu_insert_idx(pc)] <= {1'h1, pc, addr};
         if (DEBUG) $display("tu[%d]\tv: %d\tpc: %x\tlast: %x", tu_insert_idx(pc), 1'h1, pc, addr);
+
+        if (DEBUG) $display("--");
 
         // TODO: prediction
         //if (b.valid) begin

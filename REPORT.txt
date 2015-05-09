@@ -109,8 +109,8 @@ My implementation has the following specs
 Problems encountered
 --------------------
 * I had some difficulty deciding how to adapt the ISB design to my very
-  simplified processor. I think in the end, my design choices did not cripple
-the prefetcher.
+  simplified processor. I think in the end, my design choices allowed me to
+demonstrate the prefetcher well.
 
 * Memory traffic: My design has only one memory port for use by the LD unit
   (core traffic) and the prefetcher (non-critical traffic). Thus, prefetcher

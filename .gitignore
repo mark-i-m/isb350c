@@ -1,10 +1,9 @@
 mem.hex
 test.hex
 cpu
-cpu.vcd
+*.vcd
 test.ok
 test.out
 test.raw
 test.cycles
 *.swp
-stats

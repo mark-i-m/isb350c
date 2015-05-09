@@ -42,7 +42,7 @@ module ttest();
             end
             12 : begin
                 v_in <= 1;
-                pc <= 16'h0001;
+                pc <= 16'h0000;
                 addr <= 16'h0012;
             end
             13 : begin
@@ -52,24 +52,14 @@ module ttest();
             end
             14 : begin
                 v_in <= 1;
-                pc <= 16'h0002;
-                addr <= 16'h0011;
+                pc <= 16'h0000;
+                addr <= 16'h0014;
             end
-            15 : begin
-                v_in <= 1;
-                pc <= 16'h0003;
-                addr <= 16'h0011;
-            end
-            16 : begin
-                v_in <= 1;
-                pc <= 16'h0004;
-                addr <= 16'h0011;
-            end
+
 
             100 : begin
                 stop_ctr <= 1;
             end
-
             default : begin
                 v_in <= 0;
                 pc <= 16'hxxxx;

@@ -66,7 +66,7 @@ module main();
     clock c0(clk);
 
     // counter
-    counter ctr(stop_ctr, clk, ib_pop,);
+    counter ctr(stop_ctr, clk, ib_pop || ib_flush,);
     reg stop_ctr = 0;
 
     // wait until all regs are written back before halting

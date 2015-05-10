@@ -6,7 +6,7 @@ cpu : $(VFILES) Makefile
 run : cpu
 	timeout 3 ./cpu
 
-run% : cpu test%.hex
+run% : cpu tests/test%.hex
 	@cp tests/test$*.hex test.hex
 	make run
 

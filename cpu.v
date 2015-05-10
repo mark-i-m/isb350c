@@ -184,7 +184,7 @@ module main();
                                 opcode == `JEQ ? (jeqReady && `CDB_DATA(0) == 0) : 0);
     wire [31:0]ib_data_out;
 
-    fifo #(5,32,1) ib0(clk,
+    fifo #(5,32,0) ib0(clk,
         ib_push, ib_push_data, ib_full,
         ib_pop, ib_data_out, ib_empty,
         ib_flush);

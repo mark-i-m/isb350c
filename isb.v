@@ -121,9 +121,28 @@ initial begin
 end
 
 ////////////////////////////// stream predictor //////////////////////////////
-//TODO: put stuff here...
 // fifo queue of 4 entries
-fifo #(2) sb0(/*TODO: ports*/);
+//
+// each entry has the following fields:
+//
+// bits | field
+// 1    | available
+// 16   | tag (use whole data addr)
+// 16   | prefetched data
+// -----|----------------
+// 33   | total
+
+reg sb_push = 0, sb_pop = 0, sb_flush = 0; //TODO: hook these up
+reg [32:0]sb_data_in;
+
+wire sb_full, sb_empty; // TODO: hook these up
+wire [32:0]sb_data_out;
+
+fifo #(2, 33, 1) sb0(clk,
+    sb_push, sb_data_in, sb_full,
+    sb_pop, sb_data_out, sb_empty,
+    sb_flush
+);
 
 
 //////////////////////////////// on tick ////////////////////////////////////

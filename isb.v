@@ -120,10 +120,6 @@ initial begin
     end
 end
 
-// TODO: remove debugging code
-wire [96:0]sp0 = spamc[0];
-wire [96:0]sp1 = spamc[1];
-
 ////////////////////////////// stream predictor //////////////////////////////
 //TODO: put stuff here...
 // fifo queue of 4 entries

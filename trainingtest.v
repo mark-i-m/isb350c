@@ -55,6 +55,16 @@ module ttest();
                 pc <= 16'h0000;
                 addr <= 16'h0014;
             end
+            15 : begin
+                v_in <= 1;
+                pc <= 16'h0001;
+                addr <= 16'h0020;
+            end
+            16 : begin
+                v_in <= 1;
+                pc <= 16'h0001;
+                addr <= 16'h0021;
+            end
 
 
             100 : begin

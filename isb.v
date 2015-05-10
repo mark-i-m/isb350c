@@ -144,7 +144,7 @@ always @(posedge clk) begin
                     // neither A nor B in psamc
 
                     // next_sa += 16
-                    next_sa <= next_sa + 32'h16;
+                    next_sa <= next_sa + 32'h10;
 
                     // psamc[A].sa = next_sa
                     // psamc[B].sa = psamc[A].sa + 1
@@ -185,7 +185,7 @@ always @(posedge clk) begin
                     // only b in psamc
 
                     // next_sa += 16
-                    next_sa <= next_sa + 32'h16;
+                    next_sa <= next_sa + 32'h10;
 
                     // psamc[A].sa = next_sa
                     if (next_sa < 32) begin

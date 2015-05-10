@@ -24,7 +24,7 @@
 
 `define SPENTRY_V(entry)    entry[96]
 `define SPENTRY_TAG(entry)  entry[95:64]
-`define SPENTRY_PA(entry, i)  entry[63 - (16*i) -: 16]
+`define SPENTRY_PA(entry, i)  entry[(63 - (16*(i))) -: 16]
 
 `define TU_V(tu_num)    `TUENTRY_V(tu[tu_num])
 `define TU_PC(tu_num)   `TUENTRY_PC(tu[tu_num])
@@ -111,8 +111,18 @@ wire [1:0]ab_comp = {pc_v ? `PSENTRY_V(a) : 0, `PSENTRY_V(b)}; // compare presen
 // 97   | total
 //
 // 8 entries
-reg [96:0]spamc[1:0];
+reg [96:0]spamc[7:0];
 
+integer spamc_init_i;
+initial begin
+    for (spamc_init_i = 0; spamc_init_i < 32; spamc_init_i = spamc_init_i + 1) begin
+        `SPENTRY_V(spamc[spamc_init_i]) <= 0;
+    end
+end
+
+// TODO: remove debugging code
+wire [96:0]sp0 = spamc[0];
+wire [96:0]sp1 = spamc[1];
 
 ////////////////////////////// stream predictor //////////////////////////////
 //TODO: put stuff here...
@@ -246,10 +256,15 @@ always @(posedge clk) begin
 
                     // spamc[psamc[A].sa] = {A, B}
                     if (`PSENTRY_SA(a) + 32'h1 < 32) begin
-                        `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= 1'h1;
-                        `SPENTRY_TAG(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= `PSENTRY_SA(a) + 32'h1;
-                        `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], `PSENTRY_SA(a)[1:0] + 32'h1) <= addr;
-                        if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
+                        if (sp_update_idx(`PSENTRY_SA(a) + 32'h1) != sp_update_idx(`PSENTRY_SA(a))) begin
+                            `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= 1'h1;
+                            `SPENTRY_TAG(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= `PSENTRY_SA(a) + 32'h1;
+                            `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], 0) <= addr;
+                            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
+                        end else begin
+                            `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], a[3:2] + 2'h1) <= addr;
+                            if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
+                        end
                     end
 
                 end
@@ -275,10 +290,15 @@ always @(posedge clk) begin
                             end
 
                             if (`PSENTRY_SA(a) + 32'h1 < 32) begin
-                                `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= 1'h1;
-                                `SPENTRY_TAG(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= `PSENTRY_SA(a) + 32'h1;
-                                `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], `PSENTRY_SA(a)[1:0] + 2'h1) <= addr;
-                                if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
+                                if (sp_update_idx(`PSENTRY_SA(a) + 32'h1) != sp_update_idx(`PSENTRY_SA(a))) begin
+                                    `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= 1'h1;
+                                    `SPENTRY_TAG(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= `PSENTRY_SA(a) + 32'h1;
+                                    `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], 0) <= addr;
+                                    if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
+                                end else begin
+                                    `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], a[3:2] + 2'h1) <= addr;
+                                    if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
+                                end
                             end
                         end else begin
                             if(`PSENTRY_SA(b) < 32) begin

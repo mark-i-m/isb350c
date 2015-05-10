@@ -26,6 +26,7 @@
 `define REG_SRC(i)  regs[i][21:16]
 `define REG_VAL(i)  regs[i][15:0]
 
+`define RS_PC(rs_num) rs[rs_num][67:52]
 `define RS_ISSUED(rs_num) rs[rs_num][51]
 `define RS_BUSY(rs_num) rs[rs_num][50]
 `define RS_OP(rs_num) rs[rs_num][49:46]
@@ -250,7 +251,8 @@ module main();
                                           !`REG_BUSY(rb) ? `REG_VAL(rb) :
                                             `CDB_SAT(rb) ? `CDB_VAL(rb) :
                                                            16'hxxxx;
-    wire [51:0]rs_val;
+    wire [67:0]rs_val;
+    assign rs_val[67:52] = pc;
     assign rs_val[51] = 0;
     assign rs_val[50] = 1;
     assign rs_val[49:46] = opcode;
@@ -263,6 +265,7 @@ module main();
 
     // RSs
     // bits field in order
+    // 16   pc
     // 1    issued
     // 1    busy
     // 4    op
@@ -270,12 +273,12 @@ module main();
     // 12   src
     // 32   val
     // -----------
-    // 51   total
+    // 68   total
     //
     // 4 reservation stations for fxu: 0, 1, 2, 3
     // 4 reservation stations for ld: 4, 5, 6, 7
 
-    reg [51:0]rs[0:`NUM_RS-1];
+    reg [67:0]rs[0:`NUM_RS-1];
 
     // Are all RSs for the FXU full?
     wire fxu0_full = `RS_BUSY(0) && `RS_BUSY(1) && `RS_BUSY(2) && `RS_BUSY(3);
@@ -367,6 +370,7 @@ module main();
             if (readyToIssue(0)) begin
                 fxu0_rs_ready <= 1;
                 fxu0_ready_rs_num <= 0;
+                fxu0_pc <= `RS_PC(0);
                 fxu0_op <= `RS_OP(0);
                 fxu0_val0 <= `RS_VAL(0,0);
                 fxu0_val1 <= `RS_VAL(0,1);
@@ -374,6 +378,7 @@ module main();
             end else if (readyToIssue(1)) begin
                 fxu0_rs_ready <= 1;
                 fxu0_ready_rs_num <= 1;
+                fxu0_pc <= `RS_PC(1);
                 fxu0_op <= `RS_OP(1);
                 fxu0_val0 <= `RS_VAL(1,0);
                 fxu0_val1 <= `RS_VAL(1,1);
@@ -381,6 +386,7 @@ module main();
             end else if (readyToIssue(2)) begin
                 fxu0_rs_ready <= 1;
                 fxu0_ready_rs_num <= 2;
+                fxu0_pc <= `RS_PC(2);
                 fxu0_op <= `RS_OP(2);
                 fxu0_val0 <= `RS_VAL(2,0);
                 fxu0_val1 <= `RS_VAL(2,1);
@@ -388,6 +394,7 @@ module main();
             end else if (readyToIssue(3)) begin
                 fxu0_rs_ready <= 1;
                 fxu0_ready_rs_num <= 3;
+                fxu0_pc <= `RS_PC(3);
                 fxu0_op <= `RS_OP(3);
                 fxu0_val0 <= `RS_VAL(3,0);
                 fxu0_val1 <= `RS_VAL(3,1);
@@ -404,6 +411,7 @@ module main();
             if (readyToIssue(4)) begin
                 ld0_rs_ready <= 1;
                 ld0_ready_rs_num <= 4;
+                ld0_pc <= `RS_PC(4);
                 ld0_op <= `RS_OP(4);
                 ld0_val0 <= `RS_VAL(4,0);
                 ld0_val1 <= `RS_VAL(4,1);
@@ -411,6 +419,7 @@ module main();
             end else if (readyToIssue(5)) begin
                 ld0_rs_ready <= 1;
                 ld0_ready_rs_num <= 5;
+                ld0_pc <= `RS_PC(5);
                 ld0_op <= `RS_OP(5);
                 ld0_val0 <= `RS_VAL(5,0);
                 ld0_val1 <= `RS_VAL(5,1);
@@ -418,6 +427,7 @@ module main();
             end else if (readyToIssue(6)) begin
                 ld0_rs_ready <= 1;
                 ld0_ready_rs_num <= 6;
+                ld0_pc <= `RS_PC(6);
                 ld0_op <= `RS_OP(6);
                 ld0_val0 <= `RS_VAL(6,0);
                 ld0_val1 <= `RS_VAL(6,1);
@@ -425,6 +435,7 @@ module main();
             end else if (readyToIssue(7)) begin
                 ld0_rs_ready <= 1;
                 ld0_ready_rs_num <= 7;
+                ld0_pc <= `RS_PC(7);
                 ld0_op <= `RS_OP(7);
                 ld0_val0 <= `RS_VAL(7,0);
                 ld0_val1 <= `RS_VAL(7,1);
@@ -458,13 +469,14 @@ module main();
     // FXU
     reg       fxu0_rs_ready = 0;
     reg  [5:0]fxu0_ready_rs_num;
+    reg [15:0]fxu0_pc;
     reg  [3:0]fxu0_op;
     reg [15:0]fxu0_val0, fxu0_val1;
 
     wire      fxu0_busy;
 
     fxu fxu0(clk,
-        fxu0_rs_ready, fxu0_ready_rs_num, fxu0_op,
+        fxu0_rs_ready, fxu0_ready_rs_num, fxu0_op, fxu0_pc,
         fxu0_val0, fxu0_val1,
 
         `CDB_VALID(0), `CDB_RS(0), `CDB_OP(0), `CDB_DATA(0),
@@ -475,13 +487,14 @@ module main();
     // LD unit
     reg       ld0_rs_ready = 0;
     reg  [5:0]ld0_ready_rs_num;
+    reg [15:0]ld0_pc;
     reg  [3:0]ld0_op;
     reg [15:0]ld0_val0, ld0_val1;
 
     wire      ld0_busy;
 
     ld ld0(clk,
-        ld0_rs_ready, ld0_ready_rs_num, ld0_op,
+        ld0_rs_ready, ld0_ready_rs_num, ld0_op, ld0_pc,
         ld0_val0, ld0_val1,
 
         `CDB_VALID(1), `CDB_RS(1), `CDB_OP(1), `CDB_DATA(1),

@@ -32,7 +32,7 @@
 
 module ld(input clk,
     // instructions from RSs
-    input valid, input [5:0]rs_num, input [3:0]op,
+    input valid, input [5:0]rs_num, input [3:0]op, input [15:0]pc,
     input [15:0]val0, input [15:0]val1,
     // output result
     output valid_out, output [5:0]rs_num_out, output [3:0]op_out, output [15:0]res_out,
@@ -89,7 +89,10 @@ module ld(input clk,
 
     // ISB prefetcher
     // It trains on the L3 access stream and prefetches into the L3 cache
-    // TODO
+    isb #(1) isb0(clk,
+        state == `L2, pc, raddr_in,
+        ,//TODO: hook these up
+    );
 
     // update state
     always @(posedge clk) begin

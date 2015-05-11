@@ -37,8 +37,14 @@
 `define TU_LOOKUP(ip) ((`TU_V(0) && `TU_PC(0) == ip) ? tu[0] : (`TU_V(1) && `TU_PC(1) == ip) ? tu[1] : (`TU_V(2) && `TU_PC(2) == ip) ? tu[2] : (`TU_V(3) && `TU_PC(3) == ip) ? tu[3] : 33'h0)
 
 module isb(input clk,
+    // L3 access stream
     input v_in, input [15:0]pc, input [15:0]addr,
+    // Prefetch requests
     output prefetch_v, output [15:0]prefetch_addr //TODO: hook these up
+    // Requests fullfilled by memory
+    //TODO
+    // Head of prefetch queue
+    //TODO
 );
 
 // Debugging flag?

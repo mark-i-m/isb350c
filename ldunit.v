@@ -15,9 +15,8 @@
 // Evictions from one level go to the next level. Each extra level has
 // an extra cycle of latency.
 //
-// TODO:
 // Also there is a prefetcher. It trains on the L3 access stream and inserts
-// into the L3.
+// into the L3 cache. See REPORT.txt for details.
 
 // Memory access states:
 `define W0 0 //idle

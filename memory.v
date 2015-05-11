@@ -50,7 +50,7 @@ module memcontr(input clk,
     wire [15:0]dmem_rdata;
 
     // data request queues
-    fifo #(5) dq(clk, re1, raddr1, dq_full,
+    fifo #(5, 16, 1) dq(clk, re1, raddr1, dq_full,
                       dpop, ddata_out, dq_empty, 0);
 
     reg dpop = 0;

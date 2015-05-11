@@ -39,12 +39,11 @@
 module isb(input clk,
     // L3 access stream
     input v_in, input [15:0]pc, input [15:0]addr,
-    // Prefetch requests
-    output prefetch_v, output [15:0]prefetch_addr //TODO: hook these up
-    // Requests fullfilled by memory
-    //TODO
-    // Head of prefetch queue
-    //TODO
+    // Prefetch requests -- memory bus//TODO: hook these up
+    output prefetch_re, output [15:0]prefetch_addr, input prefetch_requested,
+    input [15:0]mem_addr_out, input [15:0]mem_data_out, input mem_ready,
+    // Head of prefetch queue // TODO hook these up
+    output prefetched_v, output [15:0]prefetched_addr, output [15:0]prefetched_data
 );
 
 // Debugging flag?
@@ -127,29 +126,15 @@ initial begin
 end
 
 ////////////////////////////// stream predictor //////////////////////////////
-// fifo queue of 4 entries
-//
-// each entry has the following fields:
-//
-// bits | field
-// 1    | available
-// 16   | tag (use whole data addr)
-// 16   | prefetched data
-// -----|----------------
-// 33   | total
+// TODO
 
-reg sb_push = 0, sb_pop = 0, sb_flush = 0; //TODO: hook these up
-reg [32:0]sb_data_in;
+// predictor output
+assign prefetch_re = 0;//TODO
+assign prefetch_addr = 16'hxxxx;
 
-wire sb_full, sb_empty; // TODO: hook these up
-wire [32:0]sb_data_out;
-
-fifo #(2, 33, 1) sb0(clk,
-    sb_push, sb_data_in, sb_full,
-    sb_pop, sb_data_out, sb_empty,
-    sb_flush
-);
-
+assign prefetched_v = 0;//TODO
+assign prefetched_addr = 16'hxxxx;
+assign prefetched_data = 16'hxxxx;
 
 //////////////////////////////// on tick ////////////////////////////////////
 always @(posedge clk) begin

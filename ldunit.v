@@ -88,9 +88,14 @@ module ld(input clk,
 
     // ISB prefetcher
     // It trains on the L3 access stream and prefetches into the L3 cache
+    wire prefetch_re, prefetched_v;
+    wire [15:0]prefetch_addr, prefetched_addr, prefetched_data;//TODO hook these up
+
     isb #(1) isb0(clk,
         state == `L2, pc, raddr_in,
-        ,//TODO: hook these up
+        prefetch_re, prefetch_addr, !mem_re_reg,
+        mem_addr_out, mem_data_out, mem_ready,
+        prefetched_v, prefetched_addr, prefetched_data
     );
 
     // update state
@@ -174,10 +179,10 @@ module ld(input clk,
     assign res_out = res_out_reg;
 
     reg [15:0]mem_raddr_reg = 16'hxxxx;
-    assign mem_raddr = mem_raddr_reg;
+    assign mem_raddr = mem_re_reg ? mem_raddr_reg : prefetch_addr;
 
     reg mem_re_reg = 0;
-    assign mem_re = mem_re_reg;
+    assign mem_re = mem_re_reg || prefetch_re;
 
     assign busy = valid || re_in;
 

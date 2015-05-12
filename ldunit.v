@@ -66,8 +66,9 @@ module ld(input clk,
     wire [15:0]l1d_evicted_adr;
     wire [15:0]l1d_evicted_data;
     wire l1d_evicted_valid;
-    facache l1d(clk, (op == `LD ? val0 : val0 + val1), valid && state == `W0, // TODO: insert from prefetch buffer on hit
-        raddr_in, mem_data_out, mem_ready && mem_addr_out == raddr_in,
+    facache #(1) l1d(clk, (op == `LD ? val0 : val0 + val1), valid && state == `W0,
+        raddr_in, state == `L3 ? `PREF_DATA(`PREF_IDX(raddr_in)) : mem_data_out,
+        (mem_ready && mem_addr_out == raddr_in) || (state == `L3 && `PREF_HIT(raddr_in) && `PREF_A(`PREF_IDX(raddr_in))),
         l1d_data, l1d_hit,
         l1d_evicted_adr, l1d_evicted_data, l1d_evicted_valid);
 
@@ -132,7 +133,7 @@ module ld(input clk,
 
         if (mem_ready) begin
             for (pref_update_i = 0; pref_update_i < 4; pref_update_i = pref_update_i + 1) begin
-                if (`PREF_V(pref_update_i) && `PREF_ADDR(pref_update_i) == mem_addr_out) begin
+                if (`PREF_IDX(mem_addr_out) == pref_update_i) begin
                     `PREF_A(pref_update_i) <= 1;
                     `PREF_DATA(pref_update_i) <= mem_data_out;
                     //$display("prefetched: %X = %X", mem_addr_out, mem_data_out);

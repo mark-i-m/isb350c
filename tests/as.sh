@@ -248,7 +248,15 @@ do
             if [[ $DATASECTION -eq 0 ]]; then
                 echoerr "Unknown instruction: $OP"
             fi
-            INSOUT=$OP
+            case $OP in
+                @* )
+                    findlabel "$OP" "$1" 4
+                    INSOUT=$LABELPC
+                    ;;
+                * )
+                    INSOUT=$OP
+                    ;;
+            esac
             ;;
     esac
 

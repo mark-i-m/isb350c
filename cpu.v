@@ -493,7 +493,7 @@ module main();
 
     wire      ld0_busy;
 
-    ld ld0(clk,
+    ld #(1, 0) ld0(clk,
         ld0_rs_ready, ld0_ready_rs_num, ld0_op, ld0_pc,
         ld0_val0, ld0_val1,
 

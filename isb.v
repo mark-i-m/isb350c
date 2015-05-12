@@ -47,7 +47,7 @@ module isb(input clk,
     output prefetch_re, output [15:0]prefetch_addr
 );
 
-// Debugging flag?
+parameter PREF_EN = 1;
 parameter DEBUG = 0;
 
 // next unallocated SA
@@ -136,7 +136,7 @@ end
 // heirarchy's job to dispatch those requests
 
 // predictor output
-assign prefetch_re = `PSENTRY_V(pref_trig_ps_entry) && `SPENTRY_V(pref_cand_sp_entry,pref_cand_sa[1:0]) && pref_trig;
+assign prefetch_re = `PSENTRY_V(pref_trig_ps_entry) && `SPENTRY_V(pref_cand_sp_entry,pref_cand_sa[1:0]) && pref_trig && PREF_EN;
 
 wire [50:0]pref_trig_ps_entry = `PS_LOOKUP(pref_trig_addr);
 wire [31:0]pref_cand_sa = `PSENTRY_SA(pref_trig_ps_entry) + 32'h1;

@@ -53,6 +53,7 @@ module ld(input clk,
     output busy
     );
 
+    parameter PREF_EN = 1;
     parameter DEBUG = 0;
 
     /////////////////// cache and memory access ///////////////////////
@@ -108,7 +109,7 @@ module ld(input clk,
     wire prefetch_re;
     wire [15:0]prefetch_addr;
 
-    isb #(0) isb0(clk,
+    isb #(PREF_EN, 0) isb0(clk,
         state == `L2, pc, raddr_in, // train on L3 access stream
         state == `L2, raddr_in,     // trigger prefetch on L3 access
         prefetch_re, prefetch_addr

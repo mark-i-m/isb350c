@@ -39,11 +39,8 @@
 module isb(input clk,
     // L3 access stream
     input v_in, input [15:0]pc, input [15:0]addr,
-    // Prefetch requests -- memory bus//TODO: hook these up
-    output prefetch_re, output [15:0]prefetch_addr, input prefetch_requested,
-    input [15:0]mem_addr_out, input [15:0]mem_data_out, input mem_ready,
-    // Head of prefetch queue // TODO hook these up
-    output prefetched_v, output [15:0]prefetched_addr, output [15:0]prefetched_data
+    // Prefetch requests // TODO: hook these up
+    output prefetch_re, output [15:0]prefetch_addr, input prefetch_requested
 );
 
 // Debugging flag?
@@ -129,12 +126,8 @@ end
 // TODO
 
 // predictor output
-assign prefetch_re = 0;//TODO
-assign prefetch_addr = 16'hxxxx;
-
-assign prefetched_v = 0;//TODO
-assign prefetched_addr = 16'hxxxx;
-assign prefetched_data = 16'hxxxx;
+assign prefetch_re = v_in;//TODO
+assign prefetch_addr = addr + 1;
 
 //////////////////////////////// on tick ////////////////////////////////////
 always @(posedge clk) begin

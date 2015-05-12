@@ -16,7 +16,7 @@
 // an extra cycle of latency.
 //
 // Also there is a prefetcher. It trains on the L3 access stream and inserts
-// into the L3 cache. See REPORT.txt for details.
+// into a prefetch buffer. When an addr hits in the buffer, it is moved to L1.
 
 // Memory access states:
 `define W0 0 //idle
@@ -28,6 +28,15 @@
 // opcodes
 `define LD 4
 `define LDR 5
+
+// macros
+`define PREF_V(buff_i) pref_buffer[buff_i][33]
+`define PREF_A(buff_i) pref_buffer[buff_i][32]
+`define PREF_ADDR(buff_i) pref_buffer[buff_i][31:16]
+`define PREF_DATA(buff_i) pref_buffer[buff_i][15:0]
+
+`define PREF_IDX(adr) ((`PREF_V(0) && `PREF_ADDR(0) == adr) ? 0 : (`PREF_V(1) && `PREF_ADDR(1) == adr) ? 1 : (`PREF_V(2) && `PREF_ADDR(2) == adr) ? 2 : (`PREF_V(3) && `PREF_ADDR(3) == adr) ? 3 : 4)
+`define PREF_HIT(adr) ((`PREF_V(0) && `PREF_ADDR(0) == adr) || (`PREF_V(1) && `PREF_ADDR(1) == adr) || (`PREF_V(2) && `PREF_ADDR(2) == adr) || (`PREF_V(3) && `PREF_ADDR(3) == adr))
 
 module ld(input clk,
     // instructions from RSs
@@ -57,7 +66,7 @@ module ld(input clk,
     wire [15:0]l1d_evicted_adr;
     wire [15:0]l1d_evicted_data;
     wire l1d_evicted_valid;
-    facache l1d(clk, (op == `LD ? val0 : val0 + val1), valid && state == `W0,
+    facache l1d(clk, (op == `LD ? val0 : val0 + val1), valid && state == `W0, // TODO: insert from prefetch buffer on hit
         raddr_in, mem_data_out, mem_ready && mem_addr_out == raddr_in,
         l1d_data, l1d_hit,
         l1d_evicted_adr, l1d_evicted_data, l1d_evicted_valid);
@@ -82,21 +91,55 @@ module ld(input clk,
     wire [15:0]l3d_evicted_data;
     wire l3d_evicted_valid;
     facache l3d(clk, raddr_in, state == `L2,
-        l2d_evicted_adr, l2d_evicted_data, l2d_evicted_valid, // TODO: insert prefetches here
+        l2d_evicted_adr, l2d_evicted_data, l2d_evicted_valid,
         l3d_data, l3d_hit,
         l3d_evicted_adr, l3d_evicted_data, l3d_evicted_valid);
 
     // ISB prefetcher
-    // It trains on the L3 access stream and prefetches into the L3 cache
-    wire prefetch_re, prefetched_v;
-    wire [15:0]prefetch_addr, prefetched_addr, prefetched_data;//TODO hook these up
+    // It trains on the L3 access stream and prefetches into a prefetch
+    // buffer of length 4, with round robin replacement.
+    wire prefetch_re;
+    wire prefetch_requested = !mem_re_reg;
+    wire [15:0]prefetch_addr;
 
-    isb #(1) isb0(clk,
+    isb #(0) isb0(clk,
         state == `L2, pc, raddr_in,
-        prefetch_re, prefetch_addr, !mem_re_reg,
-        mem_addr_out, mem_data_out, mem_ready,
-        prefetched_v, prefetched_addr, prefetched_data
+        prefetch_re, prefetch_addr, prefetch_requested
     );
+
+    // Prefetch buffer, checked with the L3
+    //
+    // bits | field
+    // 1    | valid
+    // 1    | avail (false until memory req fullfilled)
+    // 16   | addr
+    // 16   | data
+    // -----|------
+    // 34   | total
+
+    reg [33:0]pref_buffer[3:0];
+    reg [1:0]pref_next = 0; // round robin replacement scheme
+
+    integer pref_update_i;
+    always @(posedge clk) begin
+        // If we use only prefetch_re, we have to look out
+        // for when prefetch_re is valid for multiple cycles,
+        // such as when waiting for memory access
+        if (prefetch_re && prefetch_requested) begin
+            pref_buffer[pref_next] <= {1'h1, 1'h0, prefetch_addr, 16'hxxxx};
+            pref_next <= pref_next == 3 ? 0 : pref_next + 1;
+        end
+
+        if (mem_ready) begin
+            for (pref_update_i = 0; pref_update_i < 4; pref_update_i = pref_update_i + 1) begin
+                if (`PREF_V(pref_update_i) && `PREF_ADDR(pref_update_i) == mem_addr_out) begin
+                    `PREF_A(pref_update_i) <= 1;
+                    `PREF_DATA(pref_update_i) <= mem_data_out;
+                    //$display("prefetched: %X = %X", mem_addr_out, mem_data_out);
+                end
+            end
+        end
+    end
 
     // update state
     always @(posedge clk) begin
@@ -139,6 +182,16 @@ module ld(input clk,
                     valid_out_reg <= 1;
                     res_out_reg <= l3d_data;
                     state <= `W0;
+                end else if (`PREF_HIT(raddr_in)) begin
+                    if (`PREF_A(`PREF_IDX(raddr_in))) begin
+                        // value already there
+                        valid_out_reg <= 1;
+                        res_out_reg <= `PREF_DATA(`PREF_IDX(raddr_in));
+                        state <= `W0;
+                    end else begin
+                        // wait for request
+                        state <= `M0;
+                    end
                 end else begin // otherwise, submit mem request
                     mem_re_reg <= 1;
                     mem_raddr_reg <= raddr_in;

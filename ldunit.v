@@ -17,6 +17,8 @@
 //
 // Also there is a prefetcher. It trains on the L3 access stream and inserts
 // into a prefetch buffer. When an addr hits in the buffer, it is moved to L1.
+//
+// Prefetches are triggered by L3 accesses
 
 // Memory access states:
 `define W0 0 //idle
@@ -101,15 +103,17 @@ module ld(input clk,
     // ISB prefetcher
     // It trains on the L3 access stream and prefetches into a prefetch
     // buffer of length 4, with round robin replacement.
+    //
+    // Prefetches are triggered by L3 access, also.
     wire prefetch_re;
     wire [15:0]prefetch_addr;
 
     isb #(0) isb0(clk,
         state == `L2, pc, raddr_in, // train on L3 access stream
         state == `L2, raddr_in,     // trigger prefetch on L3 access
-        //mem_re_reg, mem_raddr_reg,
         prefetch_re, prefetch_addr
     );
+
     // catch prefetch candidates when mem is busy and submit when you can
     reg pref_re_delayed = 0;
     reg [15:0]pref_adr_delayed;
@@ -134,19 +138,18 @@ module ld(input clk,
     // 34   | total
 
     reg [33:0]pref_buffer[3:0];
-    reg [1:0]pref_next = 0; // round robin replacement scheme
+    reg [1:0]pref_next = 0; // round robin replacement policy
 
     integer pref_update_i;
     always @(posedge clk) begin
-        // If we use only prefetch_re, we have to look out
-        // for when prefetch_re is valid for multiple cycles,
-        // such as when waiting for memory access
+        // place prefetch candidate in prefetch buffer
         if (prefetch_re) begin
             pref_buffer[pref_next] <= {1'h1, 1'h0, prefetch_addr, 16'hxxxx};
             pref_next <= pref_next == 3 ? 0 : pref_next + 1;
             if (DEBUG) $display("requested: %X", prefetch_addr);
         end
 
+        // when the candidate request is ready, put it in the buffer
         if (mem_ready) begin
             for (pref_update_i = 0; pref_update_i < 4; pref_update_i = pref_update_i + 1) begin
                 if (`PREF_IDX(mem_addr_out) == pref_update_i) begin
@@ -162,7 +165,7 @@ module ld(input clk,
     // update state
     always @(posedge clk) begin
         case(state)
-            `W0 : begin // idle?
+            `W0 : begin // idle
                 // waiting for next access
                 valid_out_reg <= 0;
                 res_out_reg <= 16'hxxxx;
@@ -201,13 +204,14 @@ module ld(input clk,
                     res_out_reg <= l3d_data;
                     state <= `W0;
                 end else if (`PREF_HIT(raddr_in)) begin
+                    // a prefetch candidate fullfilled the request
                     if (`PREF_A(`PREF_IDX(raddr_in))) begin
                         // value already there
                         valid_out_reg <= 1;
                         res_out_reg <= `PREF_DATA(`PREF_IDX(raddr_in));
                         state <= `W0;
                     end else begin
-                        // wait for request
+                        // wait for request -- partial coverage
                         state <= `M0;
                     end
                     if (DEBUG) $display("prefetch hit: %X", raddr_in);

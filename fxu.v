@@ -20,7 +20,7 @@ module fxu(input clk,
     input valid, input [5:0]rs_num, input [3:0]op, input [15:0]pc,
     input [15:0]val0, input [15:0]val1,
     // output result
-    output valid_out, output [5:0]rs_num_out, output [3:0]op_out, output [15:0]res_out, //TODO: undefined wire: op_out
+    output valid_out, output [5:0]rs_num_out, output [3:0]op_out, output [15:0]res_out,
     // busy?
     output busy
     );

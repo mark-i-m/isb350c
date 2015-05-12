@@ -5,7 +5,7 @@
 
 // Specs
 // -----
-// Max steam length: 16 addrs //TODO
+// Max steam length: 16 addrs (in concept)
 // PS-AMC size: 32 entries mapping 1 addr each
 // SP-AMC size: 8 entries mapping 4 addrs each
 // Training unit: 4 entries

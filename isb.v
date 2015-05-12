@@ -22,7 +22,7 @@
 `define PSENTRY_SA(entry)   entry[33:2]
 `define PSENTRY_CTR(entry)  entry[1:0]
 
-`define SPENTRY_V(entry, i) entry[99 - (i) -: 1]
+`define SPENTRY_V(entry, i) entry[(99 - (i)) -: 1]
 `define SPENTRY_TAG(entry)  entry[95:64]
 `define SPENTRY_PA(entry, i)  entry[(63 - (16*(i))) -: 16]
 
@@ -186,13 +186,13 @@ always @(posedge clk) begin
                     end else begin
                         // Normal case
                         if (next_sa < 32) begin
-                            `SPENTRY_V(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= 1'h1;
                             `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
+                            `SPENTRY_V(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= 1'h1;
                             `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
                             if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
 
-                            `SPENTRY_V(spamc[sp_update_idx(next_sa + 1)], next_sa[1:0] + 2'h1) <= 1'h1;
                             `SPENTRY_TAG(spamc[sp_update_idx(next_sa + 1)]) <= next_sa + 32'h1;
+                            `SPENTRY_V(spamc[sp_update_idx(next_sa + 1)], next_sa[1:0] + 2'h1) <= 1'h1;
                             `SPENTRY_PA(spamc[sp_update_idx(next_sa + 1)], next_sa[1:0] + 2'h1) <= addr;
                             if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa + 32'h1), 1'h1, next_sa + 32'h1, addr);
                         end
@@ -239,14 +239,14 @@ always @(posedge clk) begin
                         end else begin
                             // Normal case
                             if (next_sa < 32) begin
-                                `SPENTRY_V(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= 1'h1;
                                 `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
+                                `SPENTRY_V(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= 1'h1;
                                 `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
                                 if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
                             end
                             if (next_sa + 1 < 32) begin
-                                `SPENTRY_V(spamc[sp_update_idx(next_sa + 32'h1)], next_sa[1:0]) <= 1'h1;
                                 `SPENTRY_TAG(spamc[sp_update_idx(next_sa + 32'h1)]) <= next_sa + 32'h1;
+                                `SPENTRY_V(spamc[sp_update_idx(next_sa + 32'h1)], next_sa[1:0] + 2'h1) <= 1'h1;
                                 `SPENTRY_PA(spamc[sp_update_idx(next_sa + 32'h1)], next_sa[1:0] + 2'h1) <= addr;
                                 if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa + 32'h1), 1'h1, next_sa + 32'h1, addr);
                             end
@@ -257,8 +257,8 @@ always @(posedge clk) begin
 
                         // update spamc[A] only
                         if (next_sa < 32) begin
-                            `SPENTRY_V(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= 1'h1;
                             `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
+                            `SPENTRY_V(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= 1'h1;
                             `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
                             if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
                         end
@@ -276,9 +276,9 @@ always @(posedge clk) begin
                     // spamc[psamc[A].sa] = {A, B}
                     if (`PSENTRY_SA(a) + 32'h1 < 32) begin
                         if (sp_update_idx(`PSENTRY_SA(a) + 32'h1) != sp_update_idx(`PSENTRY_SA(a))) begin
-                            `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], next_sa + 2'h1) <= 1'h1;
                             `SPENTRY_TAG(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= `PSENTRY_SA(a) + 32'h1;
-                            `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], 0) <= addr;
+                            `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], next_sa[1:0] + 2'h1) <= 1'h1;
+                            `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], next_sa[1:0] + 2'h1) <= addr;
                             if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
                         end else begin
                             `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], a[3:2] + 2'h1) <= 1'h1;
@@ -311,9 +311,9 @@ always @(posedge clk) begin
 
                             if (`PSENTRY_SA(a) + 32'h1 < 32) begin
                                 if (sp_update_idx(`PSENTRY_SA(a) + 32'h1) != sp_update_idx(`PSENTRY_SA(a))) begin
-                                    `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], next_sa[1:0] + 2'h1) <= 1'h1;
                                     `SPENTRY_TAG(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= `PSENTRY_SA(a) + 32'h1;
-                                    `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], 0) <= addr;
+                                    `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], next_sa[1:0] + 2'h1) <= 1'h1;
+                                    `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], next_sa[1:0] + 2'h1) <= addr;
                                     if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
                                 end else begin
                                     `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], a[3:2] + 2'h1) <= 1'h1;

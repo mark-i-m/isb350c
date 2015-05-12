@@ -51,6 +51,8 @@ module ld(input clk,
     output busy
     );
 
+    parameter DEBUG = 0;
+
     /////////////////// cache and memory access ///////////////////////
 
     // state
@@ -103,8 +105,9 @@ module ld(input clk,
     wire [15:0]prefetch_addr;
 
     isb #(0) isb0(clk,
-        state == `L2, pc, raddr_in,
-        mem_re_reg, mem_raddr_reg,
+        state == `L2, pc, raddr_in, // train on L3 access stream
+        state == `L2, raddr_in,     // trigger prefetch on L3 access
+        //mem_re_reg, mem_raddr_reg,
         prefetch_re, prefetch_addr
     );
     // catch prefetch candidates when mem is busy and submit when you can
@@ -141,6 +144,7 @@ module ld(input clk,
         if (prefetch_re) begin
             pref_buffer[pref_next] <= {1'h1, 1'h0, prefetch_addr, 16'hxxxx};
             pref_next <= pref_next == 3 ? 0 : pref_next + 1;
+            if (DEBUG) $display("requested: %X", prefetch_addr);
         end
 
         if (mem_ready) begin
@@ -148,11 +152,12 @@ module ld(input clk,
                 if (`PREF_IDX(mem_addr_out) == pref_update_i) begin
                     `PREF_A(pref_update_i) <= 1;
                     `PREF_DATA(pref_update_i) <= mem_data_out;
-                    $display("prefetched: %X = %X", mem_addr_out, mem_data_out);
+                    if (DEBUG) $display("prefetched: %X = %X", mem_addr_out, mem_data_out);
                 end
             end
         end
     end
+
 
     // update state
     always @(posedge clk) begin
@@ -205,7 +210,7 @@ module ld(input clk,
                         // wait for request
                         state <= `M0;
                     end
-                    $display("prefetch hit: %X", raddr_in);
+                    if (DEBUG) $display("prefetch hit: %X", raddr_in);
                 end else begin // otherwise, submit mem request
                     mem_re_reg <= 1;
                     mem_raddr_reg <= raddr_in;

@@ -14,6 +14,8 @@ module facache(input clk, input [15:0]adr, input readEnable, //read cache
     output [15:0]data_out, output valid_out, // read cache
     output [15:0]evicted_adr, output [15:0]evicted_data, output evicted_valid); //evictions
 
+    parameter DEBUG = 0;
+
     reg [15:0]data_out_reg;
     reg valid_out_reg = 0;
     assign data_out = data_out_reg;
@@ -68,7 +70,7 @@ module facache(input clk, input [15:0]adr, input readEnable, //read cache
                 lru_write <= 1;
                 used <= 0;
 
-                //$display("#%m[0] <= %x @ %x", data_in, insert_adr);
+                if (DEBUG) $display("%m[0] <= %x @ %x", data_in, insert_adr);
             end else if (!v[1]) begin
                 v[1] <= 1;
                 tag[1] <= insert_adr;
@@ -77,7 +79,7 @@ module facache(input clk, input [15:0]adr, input readEnable, //read cache
                 lru_write <= 1;
                 used <= 1;
 
-                //$display("#%m[1] <= %x @ %x", data_in, insert_adr);
+                if (DEBUG) $display("%m[1] <= %x @ %x", data_in, insert_adr);
             end else if (!v[2]) begin
                 v[2] <= 1;
                 tag[2] <= insert_adr;
@@ -86,7 +88,7 @@ module facache(input clk, input [15:0]adr, input readEnable, //read cache
                 lru_write <= 1;
                 used <= 2;
 
-                //$display("#%m[2] <= %x @ %x", data_in, insert_adr);
+                if (DEBUG) $display("%m[2] <= %x @ %x", data_in, insert_adr);
             end else if (!v[3]) begin
                 v[3] <= 1;
                 tag[3] <= insert_adr;
@@ -95,7 +97,7 @@ module facache(input clk, input [15:0]adr, input readEnable, //read cache
                 lru_write <= 1;
                 used <= 3;
 
-                //$display("#%m[3] <= %x @ %x", data_in, insert_adr);
+                if (DEBUG) $display("%m[3] <= %x @ %x", data_in, insert_adr);
             end else begin // cache eviction: LRU
                 evicted_adr_reg <= tag[lru_idx];
                 evicted_data_reg <= data[lru_idx];
@@ -107,7 +109,7 @@ module facache(input clk, input [15:0]adr, input readEnable, //read cache
 
                 lru_write <= 1;
                 used <= lru_idx;
-                //$display("#%m[%d] <= %x @ %x", lru_idx, data_in, insert_adr);
+                if (DEBUG) $display("%m[%d] <= %x @ %x", lru_idx, data_in, insert_adr);
             end
         end else if(readEnable) begin
             // read from cache
@@ -117,28 +119,28 @@ module facache(input clk, input [15:0]adr, input readEnable, //read cache
 
                 lru_write <= 1;
                 used <= 0;
-                //$display("#%m[0] hit %x @ %x", data[0], adr);
+                if (DEBUG) $display("%m[0] hit %x @ %x", data[0], adr);
             end else if (isHit(1,adr)) begin
                 valid_out_reg <= 1;
                 data_out_reg <= data[1];
 
                 lru_write <= 1;
                 used <= 1;
-                //$display("#%m[1] hit %x @ %x", data[1], adr);
+                if (DEBUG) $display("%m[1] hit %x @ %x", data[1], adr);
             end else if (isHit(2,adr)) begin
                 valid_out_reg <= 1;
                 data_out_reg <= data[2];
 
                 lru_write <= 1;
                 used <= 2;
-                //$display("#%m[2] hit %x @ %x", data[2], adr);
+                if (DEBUG) $display("%m[2] hit %x @ %x", data[2], adr);
             end else if (isHit(3,adr)) begin
                 valid_out_reg <= 1;
                 data_out_reg <= data[3];
 
                 lru_write <= 1;
                 used <= 3;
-                //$display("#%m[3] hit %x @ %x", data[3], adr);
+                if (DEBUG) $display("%m[3] hit %x @ %x", data[3], adr);
             end else begin
                 valid_out_reg <= 0;
                 data_out_reg <= 16'hxxxx;
@@ -150,37 +152,4 @@ module facache(input clk, input [15:0]adr, input readEnable, //read cache
             evicted_valid_reg <= 0;
         end
     end
-endmodule
-
-module lru(input clk, input lru_we, input [1:0]used, output [1:0]lru_idx);
-    reg [1:0]lru[3:0];
-    // 0 -> MRU, 3 -> LRU
-
-    initial begin
-        lru[0] = 0;
-        lru[1] = 1;
-        lru[2] = 2;
-        lru[3] = 3;
-    end
-
-    always @(posedge clk) begin
-        if (lru_we) begin // update LRU order
-            if (lru[3] == used) begin
-                lru[3] <= lru[2];
-                lru[2] <= lru[1];
-                lru[1] <= lru[0];
-                lru[0] <= used;
-            end else if (lru[2] == used) begin
-                lru[2] <= lru[1];
-                lru[1] <= lru[0];
-                lru[0] <= used;
-            end else if (lru[1] == used) begin
-                lru[1] <= lru[0];
-                lru[0] <= used;
-            end
-            ////$display("MRU->LRU: %d %d %d %d", lru[0], lru[1], lru[2], lru[3]);
-        end
-    end
-
-    assign lru_idx = lru[3];
 endmodule

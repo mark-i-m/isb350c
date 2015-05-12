@@ -22,7 +22,7 @@
 `define PSENTRY_SA(entry)   entry[33:2]
 `define PSENTRY_CTR(entry)  entry[1:0]
 
-`define SPENTRY_V(entry)    entry[96]
+`define SPENTRY_V(entry, i) entry[99 - (i) -: 1]
 `define SPENTRY_TAG(entry)  entry[95:64]
 `define SPENTRY_PA(entry, i)  entry[(63 - (16*(i))) -: 16]
 
@@ -32,6 +32,8 @@
 
 `define PS_LOOKUP(pa) ((`PSENTRY_V(psamc[pa[4:0]]) && `PSENTRY_TAG(psamc[pa[4:0]]) == pa) ? psamc[pa[4:0]] : {1'h0, 50'hx})
 
+`define SP_LOOKUP(sa) ((`SPENTRY_V(spamc[sa[4:2]], sa[1:0]) && `SPENTRY_TAG(spamc[sa[4:2]]) == {sa[31:2], 2'h0}) ? spamc[sa[4:2]] : {4'h0, 96'hx})
+
 `define TU_LOOKUP_IDX(ip) ((`TU_V(0) && `TU_PC(0) == ip) ? 0 : (`TU_V(1) && `TU_PC(1) == ip) ? 1 : (`TU_V(2) && `TU_PC(2) == ip) ? 2 : (`TU_V(3) && `TU_PC(3) == ip) ? 3 : 4)
 
 `define TU_LOOKUP(ip) ((`TU_V(0) && `TU_PC(0) == ip) ? tu[0] : (`TU_V(1) && `TU_PC(1) == ip) ? tu[1] : (`TU_V(2) && `TU_PC(2) == ip) ? tu[2] : (`TU_V(3) && `TU_PC(3) == ip) ? tu[3] : 33'h0)
@@ -39,8 +41,10 @@
 module isb(input clk,
     // L3 access stream
     input v_in, input [15:0]pc, input [15:0]addr,
-    // Prefetch requests // TODO: hook these up
-    output prefetch_re, output [15:0]prefetch_addr, input prefetch_requested
+    // Mem access stream
+    input pref_trig, input [15:0]pref_trig_addr,
+    // Prefetch requests
+    output prefetch_re, output [15:0]prefetch_addr
 );
 
 // Debugging flag?
@@ -79,6 +83,7 @@ wire [32:0]pc_tu_lookup = `TU_LOOKUP(pc);
 wire pc_v = v_in ? `TUENTRY_V(pc_tu_lookup) : 0;
 wire [15:0]pc_last = `TUENTRY_LAST(pc_tu_lookup);
 
+
 //////////////////////////////// PS-AMC ////////////////////////////////////////
 // bits | field
 // 1    | valid
@@ -106,28 +111,39 @@ wire [1:0]ab_comp = {pc_v ? `PSENTRY_V(a) : 0, `PSENTRY_V(b)}; // compare presen
 
 //////////////////////////////// SP-AMC ////////////////////////////////////////
 // bits | field
-// 1    | valid
+// 4    | valid
 // 32   | tag (just use whole addr)
 // 64   | 4 physical addresses
 // -----|----------------------
-// 97   | total
+// 100   | total
 //
 // 8 entries
-reg [96:0]spamc[7:0];
+reg [99:0]spamc[7:0];
 
 integer spamc_init_i;
 initial begin
     for (spamc_init_i = 0; spamc_init_i < 32; spamc_init_i = spamc_init_i + 1) begin
-        `SPENTRY_V(spamc[spamc_init_i]) <= 0;
+        `SPENTRY_V(spamc[spamc_init_i], 0) <= 0;
+        `SPENTRY_V(spamc[spamc_init_i], 1) <= 0;
+        `SPENTRY_V(spamc[spamc_init_i], 2) <= 0;
+        `SPENTRY_V(spamc[spamc_init_i], 3) <= 0;
     end
 end
 
+
 ////////////////////////////// stream predictor //////////////////////////////
-// TODO
+// The stream predictor just produces prefetch candidates. It is the memory
+// heirarchy's job to dispatch those requests
 
 // predictor output
-assign prefetch_re = v_in;//TODO
-assign prefetch_addr = addr + 1;
+assign prefetch_re = `PSENTRY_V(pref_trig_ps_entry) && `SPENTRY_V(pref_cand_sp_entry,pref_cand_sa[1:0]) && pref_trig;
+
+wire [50:0]pref_trig_ps_entry = `PS_LOOKUP(pref_trig_addr);
+wire [31:0]pref_cand_sa = `PSENTRY_SA(pref_trig_ps_entry) + 32'h1;
+wire [99:0]pref_cand_sp_entry = `SP_LOOKUP(pref_cand_sa);
+
+assign prefetch_addr = `SPENTRY_PA(pref_cand_sp_entry,pref_cand_sa[1:0]);
+
 
 //////////////////////////////// on tick ////////////////////////////////////
 always @(posedge clk) begin
@@ -157,10 +173,12 @@ always @(posedge clk) begin
 
                     // spamc[psamc[A].sa] = {A, B}
                     if (sp_update_idx(next_sa) == sp_update_idx(next_sa + 32'h1) && next_sa < 32) begin
-                            `SPENTRY_V(spamc[sp_update_idx(next_sa)]) <= 1'h1;
                             `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
 
+                            `SPENTRY_V(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= 1'h1;
                             `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
+
+                            `SPENTRY_V(spamc[sp_update_idx(next_sa + 32'h1)], next_sa[1:0] + 2'h1) <= 1'h1;
                             `SPENTRY_PA(spamc[sp_update_idx(next_sa + 32'h1)], next_sa[1:0] + 2'h1) <= addr;
 
                             if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
@@ -168,12 +186,12 @@ always @(posedge clk) begin
                     end else begin
                         // Normal case
                         if (next_sa < 32) begin
-                            `SPENTRY_V(spamc[sp_update_idx(next_sa)]) <= 1'h1;
+                            `SPENTRY_V(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= 1'h1;
                             `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
                             `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
                             if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
 
-                            `SPENTRY_V(spamc[sp_update_idx(next_sa + 1)]) <= 1'h1;
+                            `SPENTRY_V(spamc[sp_update_idx(next_sa + 1)], next_sa[1:0] + 2'h1) <= 1'h1;
                             `SPENTRY_TAG(spamc[sp_update_idx(next_sa + 1)]) <= next_sa + 32'h1;
                             `SPENTRY_PA(spamc[sp_update_idx(next_sa + 1)], next_sa[1:0] + 2'h1) <= addr;
                             if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa + 32'h1), 1'h1, next_sa + 32'h1, addr);
@@ -208,10 +226,12 @@ always @(posedge clk) begin
 
                         // update spamc[A,B]
                         if (sp_update_idx(next_sa) == sp_update_idx(next_sa + 32'h1) && next_sa < 32) begin
-                                `SPENTRY_V(spamc[sp_update_idx(next_sa)]) <= 1'h1;
                                 `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
 
+                                `SPENTRY_V(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= 1'h1;
                                 `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
+
+                                `SPENTRY_V(spamc[sp_update_idx(next_sa + 32'h1)], next_sa[1:0] + 2'h1) <= 1'h1;
                                 `SPENTRY_PA(spamc[sp_update_idx(next_sa + 32'h1)], next_sa[1:0] + 2'h1) <= addr;
 
                                 if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
@@ -219,13 +239,13 @@ always @(posedge clk) begin
                         end else begin
                             // Normal case
                             if (next_sa < 32) begin
-                                `SPENTRY_V(spamc[sp_update_idx(next_sa)]) <= 1'h1;
+                                `SPENTRY_V(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= 1'h1;
                                 `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
                                 `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
                                 if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
                             end
                             if (next_sa + 1 < 32) begin
-                                `SPENTRY_V(spamc[sp_update_idx(next_sa + 32'h1)]) <= 1'h1;
+                                `SPENTRY_V(spamc[sp_update_idx(next_sa + 32'h1)], next_sa[1:0]) <= 1'h1;
                                 `SPENTRY_TAG(spamc[sp_update_idx(next_sa + 32'h1)]) <= next_sa + 32'h1;
                                 `SPENTRY_PA(spamc[sp_update_idx(next_sa + 32'h1)], next_sa[1:0] + 2'h1) <= addr;
                                 if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa + 32'h1), 1'h1, next_sa + 32'h1, addr);
@@ -237,7 +257,7 @@ always @(posedge clk) begin
 
                         // update spamc[A] only
                         if (next_sa < 32) begin
-                            `SPENTRY_V(spamc[sp_update_idx(next_sa)]) <= 1'h1;
+                            `SPENTRY_V(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= 1'h1;
                             `SPENTRY_TAG(spamc[sp_update_idx(next_sa)]) <= next_sa;
                             `SPENTRY_PA(spamc[sp_update_idx(next_sa)], next_sa[1:0]) <= pc_last;
                             if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(next_sa), 1'h1, next_sa, pc_last);
@@ -256,11 +276,12 @@ always @(posedge clk) begin
                     // spamc[psamc[A].sa] = {A, B}
                     if (`PSENTRY_SA(a) + 32'h1 < 32) begin
                         if (sp_update_idx(`PSENTRY_SA(a) + 32'h1) != sp_update_idx(`PSENTRY_SA(a))) begin
-                            `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= 1'h1;
+                            `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], next_sa + 2'h1) <= 1'h1;
                             `SPENTRY_TAG(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= `PSENTRY_SA(a) + 32'h1;
                             `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], 0) <= addr;
                             if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
                         end else begin
+                            `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], a[3:2] + 2'h1) <= 1'h1;
                             `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], a[3:2] + 2'h1) <= addr;
                             if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
                         end
@@ -290,11 +311,12 @@ always @(posedge clk) begin
 
                             if (`PSENTRY_SA(a) + 32'h1 < 32) begin
                                 if (sp_update_idx(`PSENTRY_SA(a) + 32'h1) != sp_update_idx(`PSENTRY_SA(a))) begin
-                                    `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= 1'h1;
+                                    `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], next_sa[1:0] + 2'h1) <= 1'h1;
                                     `SPENTRY_TAG(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)]) <= `PSENTRY_SA(a) + 32'h1;
                                     `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], 0) <= addr;
                                     if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
                                 end else begin
+                                    `SPENTRY_V(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], a[3:2] + 2'h1) <= 1'h1;
                                     `SPENTRY_PA(spamc[sp_update_idx(`PSENTRY_SA(a) + 32'h1)], a[3:2] + 2'h1) <= addr;
                                     if (DEBUG) $display("sp[%d]\tv: %d\ttag: %x\tpa: %x", sp_update_idx(`PSENTRY_SA(a) + 32'h1), 1'h1, `PSENTRY_SA(a) + 32'h1, addr);
                                 end
@@ -314,16 +336,10 @@ always @(posedge clk) begin
         // tu[pc].last = addr
         tu[tu_insert_idx(pc)] <= {1'h1, pc, addr};
         if (DEBUG) $display("tu[%d]\tv: %d\tpc: %x\tlast: %x", tu_insert_idx(pc), 1'h1, pc, addr);
-
         if (DEBUG) $display("--");
-
-        // TODO: prediction
-        //if (b.valid) begin
-        //    prefetch = prefetch_trigger(b.sa);
-        //    prefetch_addr = spamc(prefetch);
-        //end
     end
 end
+
 
 /////////////////////////// usefull functions ///////////////////////////////
 

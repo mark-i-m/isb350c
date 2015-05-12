@@ -66,7 +66,7 @@ module ld(input clk,
     wire [15:0]l1d_evicted_adr;
     wire [15:0]l1d_evicted_data;
     wire l1d_evicted_valid;
-    facache #(1) l1d(clk, (op == `LD ? val0 : val0 + val1), valid && state == `W0,
+    facache #(0) l1d(clk, (op == `LD ? val0 : val0 + val1), valid && state == `W0,
         raddr_in, state == `L3 ? `PREF_DATA(`PREF_IDX(raddr_in)) : mem_data_out,
         (mem_ready && mem_addr_out == raddr_in) || (state == `L3 && `PREF_HIT(raddr_in) && `PREF_A(`PREF_IDX(raddr_in))),
         l1d_data, l1d_hit,
@@ -79,7 +79,7 @@ module ld(input clk,
     wire [15:0]l2d_evicted_adr;
     wire [15:0]l2d_evicted_data;
     wire l2d_evicted_valid;
-    facache l2d(clk, raddr_in, state == `L1,
+    facache #(0) l2d(clk, raddr_in, state == `L1,
         l1d_evicted_adr, l1d_evicted_data, l1d_evicted_valid,
         l2d_data, l2d_hit,
         l2d_evicted_adr, l2d_evicted_data, l2d_evicted_valid);
@@ -91,7 +91,7 @@ module ld(input clk,
     wire [15:0]l3d_evicted_adr;
     wire [15:0]l3d_evicted_data;
     wire l3d_evicted_valid;
-    facache l3d(clk, raddr_in, state == `L2,
+    facache #(0) l3d(clk, raddr_in, state == `L2,
         l2d_evicted_adr, l2d_evicted_data, l2d_evicted_valid,
         l3d_data, l3d_hit,
         l3d_evicted_adr, l3d_evicted_data, l3d_evicted_valid);
@@ -100,13 +100,25 @@ module ld(input clk,
     // It trains on the L3 access stream and prefetches into a prefetch
     // buffer of length 4, with round robin replacement.
     wire prefetch_re;
-    wire prefetch_requested = !mem_re_reg;
     wire [15:0]prefetch_addr;
 
     isb #(0) isb0(clk,
         state == `L2, pc, raddr_in,
-        prefetch_re, prefetch_addr, prefetch_requested
+        mem_re_reg, mem_raddr_reg,
+        prefetch_re, prefetch_addr
     );
+    // catch prefetch candidates when mem is busy and submit when you can
+    reg pref_re_delayed = 0;
+    reg [15:0]pref_adr_delayed;
+
+    always @(posedge clk) begin
+        if (mem_re_reg && prefetch_re) begin
+            pref_re_delayed <= 1;
+            pref_adr_delayed <= prefetch_addr;
+        end else begin
+            pref_re_delayed <= 0;
+        end
+    end
 
     // Prefetch buffer, checked with the L3
     //
@@ -126,7 +138,7 @@ module ld(input clk,
         // If we use only prefetch_re, we have to look out
         // for when prefetch_re is valid for multiple cycles,
         // such as when waiting for memory access
-        if (prefetch_re && prefetch_requested) begin
+        if (prefetch_re) begin
             pref_buffer[pref_next] <= {1'h1, 1'h0, prefetch_addr, 16'hxxxx};
             pref_next <= pref_next == 3 ? 0 : pref_next + 1;
         end
@@ -136,7 +148,7 @@ module ld(input clk,
                 if (`PREF_IDX(mem_addr_out) == pref_update_i) begin
                     `PREF_A(pref_update_i) <= 1;
                     `PREF_DATA(pref_update_i) <= mem_data_out;
-                    //$display("prefetched: %X = %X", mem_addr_out, mem_data_out);
+                    $display("prefetched: %X = %X", mem_addr_out, mem_data_out);
                 end
             end
         end
@@ -193,6 +205,7 @@ module ld(input clk,
                         // wait for request
                         state <= `M0;
                     end
+                    $display("prefetch hit: %X", raddr_in);
                 end else begin // otherwise, submit mem request
                     mem_re_reg <= 1;
                     mem_raddr_reg <= raddr_in;
@@ -233,10 +246,10 @@ module ld(input clk,
     assign res_out = res_out_reg;
 
     reg [15:0]mem_raddr_reg = 16'hxxxx;
-    assign mem_raddr = mem_re_reg ? mem_raddr_reg : prefetch_addr;
+    assign mem_raddr = mem_re_reg ? mem_raddr_reg : !pref_re_delayed ? prefetch_addr : pref_adr_delayed;
 
     reg mem_re_reg = 0;
-    assign mem_re = mem_re_reg || prefetch_re;
+    assign mem_re = mem_re_reg || prefetch_re || pref_re_delayed;
 
     assign busy = valid || re_in;
 
